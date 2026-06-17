@@ -152,6 +152,9 @@ export default function Home() {
           <TabButton active={tab === "dashboard"} onClick={() => setTab("dashboard")}>
             Dashboard
           </TabButton>
+          <TabButton active={tab === "enrolment"} onClick={() => setTab("enrolment")}>
+            Enrolment
+          </TabButton>
           {view === "admin" && (
             <TabButton active={tab === "access"} onClick={() => setTab("access")}>
               Access (RLS)
@@ -171,6 +174,7 @@ export default function Home() {
 
         {tab === "upload" && <UploadPanel view={view} />}
         {tab === "dashboard" && <Dashboard view={view} setView={setView} />}
+        {tab === "enrolment" && <EnrolmentDashboard view={view} />}
         {tab === "access" && <AccessDemo />}
         {tab === "validation" && <ValidationRules />}
         {tab === "calculations" && <CalculationDocs />}
@@ -296,7 +300,7 @@ const VIEW_ROLE = {
 
 // Entities a user can upload. staff feeds the SDG dashboard; student +
 // institution validate/store against the OECS RMR rules (lib/validationRules.js).
-const UPLOAD_ENTITIES = ["staff", "student", "institution"];
+const UPLOAD_ENTITIES = ["staff", "enrolment", "student", "institution"];
 
 function UploadPanel({ view = "institution" }) {
   // Role demoed is driven by the dashboard view toggle.
@@ -2750,6 +2754,167 @@ function Stat({ label, value }) {
     </div>
   );
 }
+
+// =====================================================================
+// ENROLMENT DASHBOARD  --  instrument T2 (no PII; aggregate counts).
+// Reads /api/sdg-enrolment and renders the SDG 4.3.3 / 4.5.1 / 4.b.1
+// indicators + per-division / per-programme breakdowns. Scope follows the
+// View-as toggle: institution -> one institution, ministry -> one
+// territory, admin -> OECS-wide.
+// =====================================================================
+function EnrolmentDashboard({ view = "institution" }) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [sel, setSel] = useState(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/sdg-enrolment");
+      const json = await res.json();
+      if (!res.ok) setError(json.error || "Failed to load enrolment data");
+      else setData(json);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (loading) return <Card><span style={{ color: COLORS.muted }}>Loading…</span></Card>;
+  if (error) return <Card style={{ background: COLORS.errBg, borderColor: COLORS.errBorder }}><span style={{ color: COLORS.errText }}>{error}</span></Card>;
+  if (!data || data.count === 0) {
+    return (
+      <Card>
+        <p style={{ color: COLORS.muted, margin: 0, fontSize: 14 }}>
+          No enrolment data yet. Upload an OECS instrument workbook with the
+          <b> Enrolment</b> data type to populate this view.
+        </p>
+      </Card>
+    );
+  }
+
+  // Scope rows: ministry groups by territory, others by institution.
+  const groups = view === "ministry" ? (data.byTerritory || []) : (data.byInstitution || []);
+  const showAll = view === "admin";
+  const selKey = sel ?? (showAll ? "__all__" : groups[0]?.key ?? "__all__");
+  const agg = selKey === "__all__" ? data : (groups.find((g) => g.key === selKey) || data);
+
+  const t = agg.totals || data.totals;
+  const indicators = agg.indicators || data.indicators;
+  const divisions = (agg.distributions || data.distributions).byDivision || [];
+  const programmes = (agg.distributions || data.distributions).byProgramme || [];
+  const maxDiv = Math.max(1, ...divisions.map((d) => d.total));
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 20 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
+        <div>
+          <h2 style={{ fontSize: 22, fontWeight: 600, margin: 0, letterSpacing: "-0.01em" }}>Enrolment (T2)</h2>
+          <p style={{ color: COLORS.muted, margin: "4px 0 0", fontSize: 14 }}>
+            Programmes, gender parity, TVET share, and ODA scholarships.
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+          {groups.length > 0 && (
+            <select value={selKey} onChange={(e) => setSel(e.target.value)} style={inputStyle}>
+              {showAll && <option value="__all__">OECS-wide ({data.count})</option>}
+              {groups.map((g) => (
+                <option key={g.key} value={g.key}>{g.key} ({g.count})</option>
+              ))}
+            </select>
+          )}
+          <button onClick={load} style={ghostButton}>Refresh</button>
+        </div>
+      </div>
+
+      {/* Headline totals */}
+      <Card>
+        <div style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
+          <Stat label="Programmes" value={agg.count} />
+          <Stat label="Total enrolled" value={t.total} />
+          <Stat label="Male" value={t.male} />
+          <Stat label="Female" value={t.female} />
+          <Stat label="TVET enrolled" value={t.tvet} />
+          <Stat label="ODA scholarships" value={t.oda} />
+        </div>
+      </Card>
+
+      {/* SDG indicator cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
+        {indicators.map((ind) => (
+          <Card key={ind.code}>
+            <div style={{ display: "grid", gap: 8 }}>
+              <SdgChip code={ind.code} colour={ind.colour} />
+              <div style={{ fontSize: 15, fontWeight: 600 }}>{ind.title}</div>
+              <div style={{ fontSize: 32, fontWeight: 700, color: ind.colour }}>
+                {ind.value == null ? "—" : ind.value}
+                <span style={{ fontSize: 15, fontWeight: 500, color: COLORS.muted, marginLeft: 4 }}>
+                  {ind.value == null ? "" : ind.unit === "%" ? "%" : ind.unit === "ratio" ? "" : ""}
+                </span>
+              </div>
+              <div style={{ fontSize: 13, color: COLORS.muted }}>{ind.detail}</div>
+            </div>
+          </Card>
+        ))}
+      </div>
+
+      {/* By division */}
+      <Card>
+        <h3 style={cardTitle}>Enrolment by division</h3>
+        <div style={{ display: "grid", gap: 14 }}>
+          {divisions.map((d) => (
+            <div key={d.key} style={{ display: "grid", gap: 6 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                <span style={{ fontWeight: 500 }}>{d.key}</span>
+                <span style={{ color: COLORS.muted }}>{d.total} ({d.male} M / {d.female} F){d.tvet > 0 ? ` · ${d.tvet} TVET` : ""}</span>
+              </div>
+              <Bar value={d.total} max={maxDiv} color={COLORS.accent} />
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* By programme */}
+      <Card style={{ minWidth: 0, overflowX: "auto" }}>
+        <h3 style={cardTitle}>Programmes ({programmes.length})</h3>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead>
+            <tr style={{ textAlign: "left", color: COLORS.muted }}>
+              <th style={enrolTh}>Programme</th>
+              <th style={enrolThNum}>M</th>
+              <th style={enrolThNum}>F</th>
+              <th style={enrolThNum}>Total</th>
+              <th style={enrolThNum}>TVET</th>
+              <th style={enrolThNum}>ODA</th>
+            </tr>
+          </thead>
+          <tbody>
+            {programmes.map((p) => (
+              <tr key={p.key} style={{ borderTop: `1px solid ${COLORS.border}` }}>
+                <td style={enrolTd}>{p.key}</td>
+                <td style={enrolTdNum}>{p.male}</td>
+                <td style={enrolTdNum}>{p.female}</td>
+                <td style={{ ...enrolTdNum, fontWeight: 600 }}>{p.total}</td>
+                <td style={enrolTdNum}>{p.tvet > 0 ? p.tvet : "—"}</td>
+                <td style={enrolTdNum}>{p.oda > 0 ? p.oda : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Card>
+    </div>
+  );
+}
+
+const enrolTh = { padding: "6px 8px", fontWeight: 600 };
+const enrolThNum = { ...enrolTh, textAlign: "right" };
+const enrolTd = { padding: "6px 8px" };
+const enrolTdNum = { ...enrolTd, textAlign: "right", fontVariantNumeric: "tabular-nums" };
 
 // ---- Dashboard section header ------------------------------------------
 function ChartHeader({ title, subtitle }) {

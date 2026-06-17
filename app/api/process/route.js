@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import { parseUpload } from "@/lib/parseUpload";
+import { parseInstrument } from "@/lib/parseInstrument";
 import { processRows } from "@/lib/ingestPipeline";
-import { listValueAliases, getPendingAliasesForSubmitter, ingestStaff } from "@/lib/db";
+import { listValueAliases, getPendingAliasesForSubmitter, ingestStaff, ingestEnrolment } from "@/lib/db";
 import { getSubmitterIdentity } from "@/lib/submitterIdentity";
 
 // Local-dev path: browser upload -> coded JSON files on disk.
@@ -17,6 +18,48 @@ export async function POST(req) {
 
   if (!file || typeof file === "string") {
     return NextResponse.json({ error: "no file uploaded" }, { status: 400 });
+  }
+
+  // ---- Enrolment (instrument T2): a multi-sheet workbook, not a flat table.
+  // Parse the three sheets (Cover/Background/Enrolment) and push the programme
+  // rows + workbook metadata to Postgres. No PII -> no pipeline/anonymizer.
+  if (entity === "enrolment") {
+    let parsed;
+    try {
+      const buf = Buffer.from(await file.arrayBuffer());
+      parsed = parseInstrument(buf);
+    } catch (e) {
+      return NextResponse.json({ error: `could not read instrument: ${e.message}` }, { status: 400 });
+    }
+    if (!parsed.enrolment.length) {
+      return NextResponse.json(
+        { error: "no programme rows found on the Enrolment sheet" }, { status: 422 }
+      );
+    }
+    const period = parsed.reportPeriod || {};
+    const meta = {
+      institution: parsed.institution || "",
+      academicYear: period.startYear && period.endYear ? `${period.startYear}/${period.endYear}` : (period.raw || ""),
+      periodStart: period.startYear || "",
+      periodEnd: period.endYear || "",
+    };
+    let outcome;
+    try {
+      outcome = await ingestEnrolment({ meta, rows: parsed.enrolment });
+    } catch (e) {
+      return NextResponse.json({ error: `database error: ${e.message}` }, { status: 500 });
+    }
+    return NextResponse.json({
+      ok: true,
+      entity,
+      institution: meta.institution,
+      academicYear: meta.academicYear,
+      total: parsed.enrolment.length,
+      accepted: outcome.inserted,
+      skipped: outcome.skipped,
+      institutionCode: outcome.institution,
+      rejected: [],
+    });
   }
 
   let rawRows;

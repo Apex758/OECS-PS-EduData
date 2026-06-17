@@ -6,6 +6,9 @@ import { readStaffRecords, readStaffMapping, readStaffRejected } from "@/lib/db"
 //   staff_mapping  -> RULI->PII mapping for row-expand reveal
 //   staff_rejected -> failed-validation rows for the rejected view
 export const runtime = "nodejs";
+// Read live every request -- never serve a stale/cached snapshot.
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 
 export async function GET() {
   let records, mappingByRuli, rejected;

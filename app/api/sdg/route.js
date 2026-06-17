@@ -6,6 +6,9 @@ import { readStaffRecords } from "@/lib/db";
 // Postgres (staff table) instead of staff-records.json. Only SAFE fields are
 // stored there -- names/DOB live in staff_mapping and are never read here.
 export const runtime = "nodejs";
+// Read live every request -- never serve a stale/cached snapshot.
+export const dynamic = "force-dynamic";
+export const fetchCache = "force-no-store";
 
 const EMPTY = {
   count: 0, indicators: [],

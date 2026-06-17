@@ -44,7 +44,8 @@ $files = @(
   "pending-aliases-scope.sql",
   "rpc.sql",
   "drilldown.sql",
-  "staff.sql"
+  "staff.sql",
+  "enrolment.sql"
 )
 foreach ($f in $files) {
   PsqlF (Join-Path $PSScriptRoot $f)

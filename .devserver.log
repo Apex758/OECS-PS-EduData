@@ -1,0 +1,22 @@
+
+> oecs-postsec-edudata@1.0.0 dev
+> next dev
+
+  ▲ Next.js 14.2.5
+  - Local:        http://localhost:3000
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 2.1s
+ ○ Compiling /api/sdg-enrolment ...
+ ✓ Compiled /api/sdg-enrolment in 732ms (177 modules)
+ GET /api/sdg-enrolment 200 in 2078ms
+ GET /api/sdg-enrolment 200 in 321ms
+ ○ Compiling / ...
+ ✓ Compiled / in 6.5s (1682 modules)
+ GET / 200 in 6862ms
+ ○ Compiling /api/stats ...
+ ✓ Compiled /api/stats in 4.5s (933 modules)
+ GET /api/stats 200 in 5427ms
+ ✓ Compiled /api/sdg in 194ms (936 modules)
+ GET /api/sdg 200 in 746ms
