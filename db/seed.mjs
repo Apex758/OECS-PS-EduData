@@ -45,8 +45,10 @@ async function main() {
   await client.connect();
   try {
     await client.query("begin");
-    // wipe (order respects FKs)
-    await client.query("truncate user_schools, app_users, students, schools, institutions, countries restart identity cascade");
+    // wipe (order respects FKs). cascade also clears staff/enrolment via their
+    // schools/countries FKs; the *_rejected tables have no FK, so name them
+    // explicitly or stale rejects survive a reseed.
+    await client.query("truncate user_schools, app_users, students, schools, institutions, countries, staff_rejected, enrolment_rejected restart identity cascade");
 
     // ---- countries + institutions ----
     const countryId = {};   // iso -> id

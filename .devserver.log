@@ -49,3 +49,14 @@ Import trace for requested module:
  POST /api/demo 200 in 2873ms
  GET /api/sdg-enrolment 200 in 645ms
  GET /api/sdg-enrolment 200 in 437ms
+ POST /api/demo 200 in 2484ms
+ ✓ Compiled /api/clear in 133ms (182 modules)
+ POST /api/clear 200 in 1677ms
+ POST /api/demo 200 in 2436ms
+ POST /api/clear 200 in 2373ms
+ ✓ Compiled in 25ms
+ ✓ Compiled /api/demo in 131ms (178 modules)
+ POST /api/demo 200 in 3147ms
+ ✓ Compiled /api/clear in 31ms (182 modules)
+ POST /api/clear 200 in 1777ms
+ POST /api/demo 200 in 2294ms
