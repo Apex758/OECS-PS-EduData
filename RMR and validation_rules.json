@@ -1,0 +1,178 @@
+[
+  {
+    "field_name": "sex",
+    "data_type": "String",
+    "format": "Enum",
+    "allowed_codes": "M, F, U",
+    "allowed_values": "Male, Female, Unknown",
+    "validation_rule": "Must be one of M, F, or U.",
+    "error_message": "Invalid sex: value must match OECS RMR approved values.",
+    "required": "Conditional",
+    "source_standard": "OECS RMR / UIS disaggregation"
+  },
+  {
+    "field_name": "attendance_mode",
+    "data_type": "String",
+    "format": "Enum",
+    "allowed_codes": "FT, PT",
+    "allowed_values": "Full Time, Part Time",
+    "validation_rule": "Must be FT or PT.",
+    "error_message": "Invalid attendance_mode: value must match OECS RMR approved values.",
+    "required": "Conditional",
+    "source_standard": "OECS RMR"
+  },
+  {
+    "field_name": "programme_type",
+    "data_type": "String",
+    "format": "Enum",
+    "allowed_codes": "CERT, CAPE, DIP, AD, BACH, MAST, PHD, CVQ",
+    "allowed_values": "Certificate, CAPE, Diploma, Associate Degree, Bachelor Degree, Masters Degree, Doctorate / PhD, Caribbean Vocational Qualification",
+    "validation_rule": "Must match approved programme_type code list.",
+    "error_message": "Invalid programme_type: value must match OECS RMR approved values.",
+    "required": "Conditional",
+    "source_standard": "OECS RMR"
+  },
+  {
+    "field_name": "qualification_level",
+    "data_type": "String",
+    "format": "Enum",
+    "allowed_codes": "CERT, CAPE, DIP, AD, UG, GRAD, PG, PHD",
+    "allowed_values": "Certificate, CAPE, Diploma, Associate Degree, Undergraduate Degree, Graduate Degree, Postgraduate Degree, Doctorate",
+    "validation_rule": "Must match approved qualification_level code list.",
+    "error_message": "Invalid qualification_level: value must match OECS RMR approved values.",
+    "required": "Conditional",
+    "source_standard": "OECS RMR"
+  },
+  {
+    "field_name": "isced_level",
+    "data_type": "String",
+    "format": "Enum",
+    "allowed_codes": "ISCED4, ISCED5, ISCED6, ISCED7, ISCED8",
+    "allowed_values": "Post-secondary non-tertiary, Short-cycle tertiary, Bachelor or equivalent, Master or equivalent, Doctoral or equivalent",
+    "validation_rule": "Must be ISCED4, ISCED5, ISCED6, ISCED7, or ISCED8.",
+    "error_message": "Invalid isced_level: value must match OECS RMR approved values.",
+    "required": "Conditional",
+    "source_standard": "UNESCO ISCED 2011"
+  },
+  {
+    "field_name": "cvq_level",
+    "data_type": "String",
+    "format": "Enum",
+    "allowed_codes": "CVQ1, CVQ2, CVQ3, CVQ4, CVQ5",
+    "allowed_values": "CVQ Level 1, CVQ Level 2, CVQ Level 3, CVQ Level 4, CVQ Level 5",
+    "validation_rule": "Must be CVQ1, CVQ2, CVQ3, CVQ4, or CVQ5.",
+    "error_message": "Invalid cvq_level: value must match OECS RMR approved values.",
+    "required": "Conditional",
+    "source_standard": "CVQ / OECS RMR"
+  },
+  {
+    "field_name": "age_band",
+    "data_type": "String",
+    "format": "Enum",
+    "allowed_codes": "<16, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30-34, 35-39, 40+, Unknown",
+    "allowed_values": "<16, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30-34, 35-39, 40+, Unknown",
+    "validation_rule": "Must match approved age_band list.",
+    "error_message": "Invalid age_band: value must match OECS RMR approved values.",
+    "required": "Conditional",
+    "source_standard": "OECS RMR / UIS reporting"
+  },
+  {
+    "field_name": "dropout_reason",
+    "data_type": "String",
+    "format": "Enum",
+    "allowed_codes": "FIN, ACAD, EMP, MIG, HLTH, FAM, TRF, DISC, PERS, UNK",
+    "allowed_values": "Financial Difficulty, Academic Difficulty, Employment, Migration, Health, Family Responsibility, Transfer to Another Institution, Disciplinary, Personal Reasons, Unknown",
+    "validation_rule": "Must match approved dropout_reason code list.",
+    "error_message": "Invalid dropout_reason: value must match OECS RMR approved values.",
+    "required": "Conditional",
+    "source_standard": "OECS RMR"
+  },
+  {
+    "field_name": "teacher_classification",
+    "data_type": "String",
+    "format": "Enum",
+    "allowed_codes": "PRIN, VPRIN, DEAN, HOD, LECT, INST, TUTOR",
+    "allowed_values": "Principal, Vice Principal, Dean, Head of Department, Lecturer, Instructor, Tutor",
+    "validation_rule": "Must match approved teacher_classification code list.",
+    "error_message": "Invalid teacher_classification: value must match OECS RMR approved values.",
+    "required": "Conditional",
+    "source_standard": "OECS RMR"
+  },
+  {
+    "field_name": "highest_qualification",
+    "data_type": "String",
+    "format": "Enum",
+    "allowed_codes": "PHD, MAST, PGD, BACH, AD, DIP, CERT, CAPE",
+    "allowed_values": "PhD, Masters Degree, Post Graduate Diploma, Bachelors Degree, Associate Degree, Diploma, Certificate, CAPE/A-Levels",
+    "validation_rule": "Must match approved highest_qualification code list.",
+    "error_message": "Invalid highest_qualification: value must match OECS RMR approved values.",
+    "required": "Conditional",
+    "source_standard": "OECS RMR"
+  },
+  {
+    "field_name": "yes_no",
+    "data_type": "Boolean",
+    "format": "Enum/Boolean",
+    "allowed_codes": "Y, N",
+    "allowed_values": "Yes, No",
+    "validation_rule": "Must be Y or N for coded submissions; may map to TRUE/FALSE in system storage.",
+    "error_message": "Invalid yes_no: value must match OECS RMR approved values.",
+    "required": "Conditional",
+    "source_standard": "OECS RMR / JSON Boolean"
+  },
+  {
+    "field_name": "institution_status",
+    "data_type": "String",
+    "format": "Enum",
+    "allowed_codes": "ACTIVE, INACTIVE, CLOSED",
+    "allowed_values": "Active, Inactive, Closed",
+    "validation_rule": "Must be ACTIVE, INACTIVE, or CLOSED.",
+    "error_message": "Invalid institution_status: value must match OECS RMR approved values.",
+    "required": "Conditional",
+    "source_standard": "OECS DSF"
+  },
+  {
+    "field_name": "sector_type",
+    "data_type": "String",
+    "format": "Enum",
+    "allowed_codes": "PUB, PRIV, IND",
+    "allowed_values": "Public, Private, Independent",
+    "validation_rule": "Must be PUB, PRIV, or IND.",
+    "error_message": "Invalid sector_type: value must match OECS RMR approved values.",
+    "required": "Conditional",
+    "source_standard": "OECS DSF"
+  },
+  {
+    "field_name": "gender_composition",
+    "data_type": "String",
+    "format": "Enum",
+    "allowed_codes": "COED, MALE, FEMALE",
+    "allowed_values": "Co-ed, Male, Female",
+    "validation_rule": "Must be COED, MALE, or FEMALE.",
+    "error_message": "Invalid gender_composition: value must match OECS RMR approved values.",
+    "required": "Conditional",
+    "source_standard": "OECS DSF"
+  },
+  {
+    "field_name": "locality",
+    "data_type": "String",
+    "format": "Enum",
+    "allowed_codes": "URB, RUR, REMRUR",
+    "allowed_values": "Urban, Rural, Remote-rural",
+    "validation_rule": "Must be URB, RUR, or REMRUR.",
+    "error_message": "Invalid locality: value must match OECS RMR approved values.",
+    "required": "Conditional",
+    "source_standard": "OECS DSF"
+  },
+  {
+    "field_name": "funding_source",
+    "data_type": "String",
+    "format": "Enum",
+    "allowed_codes": "GOV, DON, PTA, PRIV, OTH",
+    "allowed_values": "Government, Donor, PTA, Private, Other",
+    "validation_rule": "Must match approved funding_source code list.",
+    "error_message": "Invalid funding_source: value must match OECS RMR approved values.",
+    "required": "Conditional",
+    "source_standard": "OECS DSF"
+  }
+]

@@ -16,24 +16,26 @@
 // refresh token server-side ONLY. Do not copy this part to prod.
 // =====================================================================
 import NextAuth from "next-auth";
-import Auth0 from "next-auth/providers/auth0";
+// import Auth0 from "next-auth/providers/auth0";   // TEMP: disabled until AUTH0_CLIENT_ID/SECRET set
 import { resolveUserByEmail } from "@/lib/db";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
   providers: [
-    Auth0({
-      clientId: process.env.AUTH0_CLIENT_ID,
-      clientSecret: process.env.AUTH0_CLIENT_SECRET,
-      issuer: process.env.AUTH0_ISSUER,   // https://YOUR_TENANT.<region>.auth0.com
-      authorization: {
-        params: {
-          // offline_access = the OIDC way to get a refresh token from Auth0.
-          scope: "openid profile email offline_access",
-          prompt: "consent",
-        },
-      },
-    }),
+    // TEMP: Auth0 disabled — empty AUTH0_CLIENT_ID/SECRET caused 500 on /api/auth/session.
+    // Re-enable by uncommenting the import above + this block once credentials are set.
+    // Auth0({
+    //   clientId: process.env.AUTH0_CLIENT_ID,
+    //   clientSecret: process.env.AUTH0_CLIENT_SECRET,
+    //   issuer: process.env.AUTH0_ISSUER,   // https://YOUR_TENANT.<region>.auth0.com
+    //   authorization: {
+    //     params: {
+    //       // offline_access = the OIDC way to get a refresh token from Auth0.
+    //       scope: "openid profile email offline_access",
+    //       prompt: "consent",
+    //     },
+    //   },
+    // }),
   ],
   callbacks: {
     // Runs on sign-in and on every session read. `account` is only present
