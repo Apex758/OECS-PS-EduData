@@ -1,105 +1,110 @@
 -- =====================================================================
--- ROW LEVEL SECURITY  --  the core of the demo
+-- ROW LEVEL SECURITY  --  the core of the demo (Supabase JWT model)
 -- =====================================================================
--- The Next.js server connects as role `app_client` and, per request, runs:
---     SET LOCAL app.user_id    = '<id>';
---     SET LOCAL app.role       = '<teacher|minister|admin>';
---     SET LOCAL app.country_id = '<id>';
--- Policies below read those via current_setting(..., true) -- the `true`
--- makes a missing setting return NULL instead of erroring (e.g. unauth'd).
+-- End users reach Postgres through PostgREST as the `authenticated` role,
+-- carrying a JWT (real users: Auth0 via Supabase third-party auth; demo
+-- personas: a short-lived JWT the server mints, both with an `email` claim).
+-- app_current_user() (functions.sql) resolves that email -> the app_users
+-- row, so every policy below scopes by the caller's role / country / school.
 --
--- FORCE makes RLS apply even to the table owner; app_client is not the
--- owner anyway, but FORCE keeps the demo honest if you connect as owner.
+-- `service_role` (server-trusted ingest/admin/cron) has BYPASSRLS and is not
+-- subject to any of this. FORCE ROW LEVEL SECURITY keeps the demo honest even
+-- if you connect as the table owner.
+--
+-- NOTE: app_current_user() is STABLE + SECURITY DEFINER, so referencing it
+-- once per row is fine; Postgres caches it within a statement.
 -- =====================================================================
-
--- Helper expressions repeated below:
---   role        = current_setting('app.role', true)
---   uid         = nullif(current_setting('app.user_id', true), '')::int
---   country     = nullif(current_setting('app.country_id', true), '')::int
 
 -- ---- STUDENTS ----
 alter table students enable row level security;
 alter table students force  row level security;
 
+drop policy if exists students_access on students;
 create policy students_access on students
 for all
+to authenticated
 using (
-       current_setting('app.role', true) = 'admin'
-    or (current_setting('app.role', true) = 'minister'
-        and country_id = nullif(current_setting('app.country_id', true), '')::int
-        -- per-user drill-down: when app.can_drill = '0', this minister sees no
-        -- individual students at all.
-        and current_setting('app.can_drill', true) is distinct from '0'
-        -- per-institution drill-down: admin can also switch off a single school
-        -- (or a whole level) via schools.can_drill. Aggregate counts still come
-        -- via school_stats_by_ids(), a SECURITY DEFINER function.
-        and can_drill_school(school_id))
-    or (current_setting('app.role', true) = 'teacher'
-        and school_id in (
-              select us.school_id from user_schools us
-              where us.user_id = nullif(current_setting('app.user_id', true), '')::int)
-        and can_drill_school(school_id))
+       (select role from app_current_user()) = 'admin'
+    or (   (select role from app_current_user()) = 'minister'
+       and country_id = (select country_id from app_current_user())
+       -- per-user drill-down: minister with can_drill_students = false sees
+       -- no individual students at all (aggregate counts still come via the
+       -- SECURITY DEFINER stat functions).
+       and coalesce((select can_drill_students from app_current_user()), true)
+       -- per-institution drill-down: admin can switch off a single school.
+       and can_drill_school(school_id))
+    or (   (select role from app_current_user()) = 'teacher'
+       and school_id in (
+             select us.school_id from user_schools us
+             where us.user_id = (select id from app_current_user()))
+       and can_drill_school(school_id))
 );
 
 -- ---- SCHOOLS ----
 alter table schools enable row level security;
 alter table schools force  row level security;
 
+drop policy if exists schools_access on schools;
 create policy schools_access on schools
 for all
+to authenticated
 using (
-       current_setting('app.role', true) = 'admin'
-    or (current_setting('app.role', true) = 'minister'
-        and country_id = nullif(current_setting('app.country_id', true), '')::int)
-    or (current_setting('app.role', true) = 'teacher'
-        and id in (
-              select us.school_id from user_schools us
-              where us.user_id = nullif(current_setting('app.user_id', true), '')::int))
+       (select role from app_current_user()) = 'admin'
+    or (   (select role from app_current_user()) = 'minister'
+       and country_id = (select country_id from app_current_user()))
+    or (   (select role from app_current_user()) = 'teacher'
+       and id in (
+             select us.school_id from user_schools us
+             where us.user_id = (select id from app_current_user())))
 );
 
 -- ---- INSTITUTIONS  (ministry/territory level: minister + admin only) ----
 alter table institutions enable row level security;
 alter table institutions force  row level security;
 
+drop policy if exists institutions_access on institutions;
 create policy institutions_access on institutions
 for all
+to authenticated
 using (
-       current_setting('app.role', true) = 'admin'
-    or (current_setting('app.role', true) = 'minister'
-        and country_id = nullif(current_setting('app.country_id', true), '')::int)
+       (select role from app_current_user()) = 'admin'
+    or (   (select role from app_current_user()) = 'minister'
+       and country_id = (select country_id from app_current_user()))
 );
 
 -- ---- COUNTRIES  (everyone authenticated may read their own territory) ----
 alter table countries enable row level security;
 alter table countries force  row level security;
 
+drop policy if exists countries_access on countries;
 create policy countries_access on countries
 for all
+to authenticated
 using (
-       current_setting('app.role', true) = 'admin'
-    or id = nullif(current_setting('app.country_id', true), '')::int
+       (select role from app_current_user()) = 'admin'
+    or id = (select country_id from app_current_user())
 );
 
--- ---- APP_USERS  (admin manages everyone; others see only themselves) ----
+-- ---- APP_USERS  (others see only themselves; admin via service_role) ----
+-- Admin user management runs server-side under service_role (BYPASSRLS), so
+-- no admin policy is needed here. A signed-in user may read only their own row.
 alter table app_users enable row level security;
 alter table app_users force  row level security;
 
-create policy app_users_admin on app_users
-for all
-using (current_setting('app.role', true) = 'admin');
-
+drop policy if exists app_users_admin on app_users;
+drop policy if exists app_users_self  on app_users;
 create policy app_users_self on app_users
 for select
-using (id = nullif(current_setting('app.user_id', true), '')::int);
+to authenticated
+using (id = (select id from app_current_user()));
 
--- ---- USER_SCHOOLS  (admin manages; teacher reads own mappings) ----
+-- ---- USER_SCHOOLS  (teacher reads own mappings; admin via service_role) ----
 alter table user_schools enable row level security;
 alter table user_schools force  row level security;
 
-create policy user_schools_admin on user_schools
-for all
-using (current_setting('app.role', true) = 'admin');
-
+drop policy if exists user_schools_admin on user_schools;
+drop policy if exists user_schools_self  on user_schools;
 create policy user_schools_self on user_schools
 for select
-using (user_id = nullif(current_setting('app.user_id', true), '')::int);
+to authenticated
+using (user_id = (select id from app_current_user()));

@@ -37,22 +37,25 @@ $$;
 
 revoke all on function can_drill_school(int)      from public;
 revoke all on function school_stats_by_ids(int[]) from public;
-grant execute on function can_drill_school(int)      to app_client;
-grant execute on function school_stats_by_ids(int[]) to app_client;
+grant execute on function can_drill_school(int)      to authenticated, service_role;
+grant execute on function school_stats_by_ids(int[]) to authenticated, service_role;
 
 -- ---- rewrite the students policy to gate non-admins by the school flag ----
+-- Supabase JWT model: scope comes from app_current_user() (see functions.sql),
+-- not SET LOCAL app.* GUCs. Mirrors db/policies.sql.
 drop policy if exists students_access on students;
 create policy students_access on students
 for all
+to authenticated
 using (
-       current_setting('app.role', true) = 'admin'
-    or (current_setting('app.role', true) = 'minister'
-        and country_id = nullif(current_setting('app.country_id', true), '')::int
-        and current_setting('app.can_drill', true) is distinct from '0'
-        and can_drill_school(school_id))
-    or (current_setting('app.role', true) = 'teacher'
-        and school_id in (
-              select us.school_id from user_schools us
-              where us.user_id = nullif(current_setting('app.user_id', true), '')::int)
-        and can_drill_school(school_id))
+       (select role from app_current_user()) = 'admin'
+    or (   (select role from app_current_user()) = 'minister'
+       and country_id = (select country_id from app_current_user())
+       and coalesce((select can_drill_students from app_current_user()), true)
+       and can_drill_school(school_id))
+    or (   (select role from app_current_user()) = 'teacher'
+       and school_id in (
+             select us.school_id from user_schools us
+             where us.user_id = (select id from app_current_user()))
+       and can_drill_school(school_id))
 );

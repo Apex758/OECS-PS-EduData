@@ -294,11 +294,17 @@ const VIEW_ROLE = {
   admin:       "admin",
 };
 
+// Entities a user can upload. staff feeds the SDG dashboard; student +
+// institution validate/store against the OECS RMR rules (lib/validationRules.js).
+const UPLOAD_ENTITIES = ["staff", "student", "institution"];
+
 function UploadPanel({ view = "institution" }) {
   // Role demoed is driven by the dashboard view toggle.
   const role = VIEW_ROLE[view] || "teacher";
-  const entity = ROLE_ENTITY[role] || "staff";
   const scope = ROLE_SCOPE[role] || "institution";
+  // Entity defaults from role but the user can override it (e.g. upload
+  // student or institution data through the same panel).
+  const [entity, setEntity] = useState(ROLE_ENTITY[role] || "staff");
 
   // Each entry: { id, file, status: 'pending'|'processing'|'done'|'error', result, error }
   const [queue, setQueue] = useState([]);
@@ -573,6 +579,23 @@ function UploadPanel({ view = "institution" }) {
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: COLORS.muted }}>
+              Data type
+              <select
+                value={entity}
+                onChange={(e) => setEntity(e.target.value)}
+                disabled={processing}
+                style={{
+                  background: COLORS.card, color: "var(--text)",
+                  border: `1px solid ${COLORS.border}`, borderRadius: 8,
+                  padding: "6px 10px", fontSize: 13, fontWeight: 600, cursor: "pointer",
+                }}
+              >
+                {UPLOAD_ENTITIES.map((e) => (
+                  <option key={e} value={e}>{e.charAt(0).toUpperCase() + e.slice(1)}</option>
+                ))}
+              </select>
+            </label>
             <button
               onClick={processAll}
               disabled={processing || pendingCount === 0}

@@ -83,11 +83,13 @@ create index on schools(country_id);
 create index on user_schools(user_id);
 
 -- ---------------------------------------------------------------------
--- Grants for the app role used by the Next.js server. The role itself
--- (app_client) is created by db/setup.ps1 with the password from
--- .env.local BEFORE this file runs -- it is NOT a superuser and NOT the
--- table owner, so FORCE ROW LEVEL SECURITY in policies.sql applies to it.
+-- Grants for the Supabase PostgREST roles. The app connects either as
+-- `authenticated` (end users, via a Supabase/Auth0 JWT -> RLS in
+-- policies.sql filters every row) or `service_role` (server-trusted
+-- ingest/admin/cron -- BYPASSRLS by default, so it sees everything).
+-- `anon` gets nothing here; unauthenticated callers see no data.
+-- FORCE ROW LEVEL SECURITY in policies.sql still applies to `authenticated`.
 -- ---------------------------------------------------------------------
-grant usage on schema public to app_client;
-grant select, insert, update, delete on all tables in schema public to app_client;
-grant usage, select on all sequences in schema public to app_client;
+grant usage on schema public to authenticated, service_role;
+grant select, insert, update, delete on all tables in schema public to authenticated, service_role;
+grant usage, select on all sequences in schema public to authenticated, service_role;

@@ -36,7 +36,12 @@ const USERS = JSON.parse(
 ).users;
 
 async function main() {
-  const client = new pg.Client({ connectionString: process.env.SEED_DATABASE_URL });
+  // Supabase (managed PG) requires TLS; accept its chain unless PGSSL=disable
+  // (local dev). Connects via the DIRECT connection string in SEED_DATABASE_URL.
+  const client = new pg.Client({
+    connectionString: process.env.SEED_DATABASE_URL,
+    ssl: process.env.PGSSL === "disable" ? false : { rejectUnauthorized: false },
+  });
   await client.connect();
   try {
     await client.query("begin");

@@ -27,5 +27,6 @@ create index if not exists idx_pending_aliases_submitter
 create index if not exists idx_pending_aliases_status
   on pending_aliases(status);
 
-grant select, insert, update on pending_aliases to app_client;
-grant usage, select on all sequences in schema public to app_client;
+-- Server-side only (submit + admin review run under service_role).
+grant select, insert, update on pending_aliases to service_role;
+grant usage, select on all sequences in schema public to service_role;

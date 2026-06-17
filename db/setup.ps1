@@ -1,71 +1,58 @@
 # =====================================================================
-# SETUP  --  stand up the student_demo database (idempotent)
+# SETUP  --  apply the schema to a SUPABASE project, then seed
 # =====================================================================
-#   1. create database student_demo (if missing)
-#   2. create/alter role app_client with password from .env.local
-#   3. run schema.sql  (tables + grants)
-#   4. run policies.sql (RLS)
-#   5. run seed.mjs    (demo data, via node + pg)
-# Uses the superuser password from db/.superuser-password.txt.
+# Runs every migration file against the Supabase DIRECT connection, then
+# seeds demo data. No local Postgres, no app_client role -- Supabase provides
+# the `authenticated` / `service_role` roles the app uses.
+#
+#   1. read SEED_DATABASE_URL (Supabase direct connection) from .env.local
+#   2. psql -f each file IN ORDER (functions before policies: the RLS policies
+#      call app_current_user(); rpc/staff after the layers they reference)
+#   3. node db/seed.mjs (demo data, via pg over the same connection)
+#
+# Requires the psql client (any recent PostgreSQL install).
 # =====================================================================
-# NOTE: do NOT use ErrorActionPreference=Stop here -- psql writes harmless
-# NOTICEs to stderr which PowerShell would otherwise treat as terminating.
-# Real SQL errors are caught via ON_ERROR_STOP=1 + $LASTEXITCODE checks.
+# NOTE: psql writes harmless NOTICEs to stderr; ON_ERROR_STOP=1 + $LASTEXITCODE
+# catch real SQL errors, so don't use ErrorActionPreference=Stop here.
 $ErrorActionPreference = "Continue"
-$Bin   = "C:\Program Files\PostgreSQL\17\bin"
-$Psql  = "$Bin\psql.exe"
-$Root  = Split-Path $PSScriptRoot -Parent
+$Bin  = "C:\Program Files\PostgreSQL\17\bin"
+$Psql = "$Bin\psql.exe"
+$Root = Split-Path $PSScriptRoot -Parent
 
-# ---- secrets ----
-$superPw = (Get-Content (Join-Path $PSScriptRoot ".superuser-password.txt") -Raw).Trim()
+# ---- connection (Supabase direct connection string) ----
 $envText = Get-Content (Join-Path $Root ".env.local")
-$appPw   = ($envText | Where-Object { $_ -match '^APP_CLIENT_PASSWORD=' }) -replace '^APP_CLIENT_PASSWORD=',''
-if (-not $appPw) { Write-Error "APP_CLIENT_PASSWORD not found in .env.local"; exit 1 }
+$dbUrl = (($envText | Where-Object { $_ -match '^SEED_DATABASE_URL=' }) -replace '^SEED_DATABASE_URL=','').Trim().Trim('"')
+if (-not $dbUrl) { Write-Error "SEED_DATABASE_URL not found in .env.local"; exit 1 }
 
-$env:PGPASSWORD = $superPw
-function Psql([string]$db, [string]$sql)  { & $Psql -U postgres -h localhost -w -d $db -v ON_ERROR_STOP=1 -c $sql }
-function PsqlF([string]$db, [string]$file){ & $Psql -U postgres -h localhost -w -d $db -v ON_ERROR_STOP=1 -f $file; if ($LASTEXITCODE -ne 0) { Write-Error "psql failed on $file"; exit 1 } }
-function PsqlScalar([string]$db, [string]$sql) { $r = & $Psql -U postgres -h localhost -w -t -A -d $db -c $sql; return ("$r").Trim() }
+function PsqlF([string]$file) {
+  & $Psql $dbUrl -v ON_ERROR_STOP=1 -f $file
+  if ($LASTEXITCODE -ne 0) { Write-Error "psql failed on $file"; exit 1 }
+}
 
-# 1. database
-$exists = PsqlScalar "postgres" "select 1 from pg_database where datname='student_demo'"
-if ($exists -ne "1") { Psql "postgres" "create database student_demo" | Out-Null; Write-Host "created database student_demo" }
-else { Write-Host "database student_demo already exists" }
+# Order matters: functions.sql defines app_current_user()/can_drill_school()
+# used by policies.sql + staff.sql; rpc.sql references the additive ingest/
+# alias/sheet tables, so it runs after them.
+$files = @(
+  "schema.sql",
+  "functions.sql",
+  "policies.sql",
+  "ingest.sql",
+  "sheets.sql",
+  "value-aliases.sql",
+  "pending-aliases.sql",
+  "pending-aliases-notify.sql",
+  "pending-aliases-scope.sql",
+  "rpc.sql",
+  "drilldown.sql",
+  "staff.sql"
+)
+foreach ($f in $files) {
+  PsqlF (Join-Path $PSScriptRoot $f)
+  Write-Host "applied $f"
+}
 
-# 2. role (create or update password)
-$roleExists = PsqlScalar "postgres" "select 1 from pg_roles where rolname='app_client'"
-if ($roleExists -ne "1") { Psql "postgres" "create role app_client login password '$appPw'" | Out-Null; Write-Host "created role app_client" }
-else { Psql "postgres" "alter role app_client login password '$appPw'" | Out-Null; Write-Host "updated role app_client password" }
-
-# 3 + 4. schema + policies
-PsqlF "student_demo" (Join-Path $PSScriptRoot "schema.sql")
-Write-Host "applied schema.sql"
-PsqlF "student_demo" (Join-Path $PSScriptRoot "policies.sql")
-Write-Host "applied policies.sql"
-PsqlF "student_demo" (Join-Path $PSScriptRoot "functions.sql")
-Write-Host "applied functions.sql"
-# additive ingest layer (school_api_keys, student_mapping, students.identity_hash)
-PsqlF "student_demo" (Join-Path $PSScriptRoot "ingest.sql")
-Write-Host "applied ingest.sql"
-# additive Google Sheets layer (school_sheets registry for the cron pull)
-PsqlF "student_demo" (Join-Path $PSScriptRoot "sheets.sql")
-Write-Host "applied sheets.sql"
-# additive value-alias layer (admin-approved enum normalizations)
-PsqlF "student_demo" (Join-Path $PSScriptRoot "value-aliases.sql")
-Write-Host "applied value-aliases.sql"
-# additive uploader-submitted alias suggestions + notification + room scope
-PsqlF "student_demo" (Join-Path $PSScriptRoot "pending-aliases.sql")
-Write-Host "applied pending-aliases.sql"
-PsqlF "student_demo" (Join-Path $PSScriptRoot "pending-aliases-notify.sql")
-Write-Host "applied pending-aliases-notify.sql"
-PsqlF "student_demo" (Join-Path $PSScriptRoot "pending-aliases-scope.sql")
-Write-Host "applied pending-aliases-scope.sql"
-# additive per-institution drill-down toggle (schools.can_drill + students policy)
-PsqlF "student_demo" (Join-Path $PSScriptRoot "drilldown.sql")
-Write-Host "applied drilldown.sql"
-
-# 5. seed (node, superuser conn bypasses RLS)
-$env:SEED_DATABASE_URL = "postgres://postgres:$superPw@localhost:5432/student_demo"
+# ---- seed (node + pg, direct connection, bypasses RLS) ----
+$env:SEED_DATABASE_URL = $dbUrl
 Push-Location $Root
 node (Join-Path $PSScriptRoot "seed.mjs")
 Pop-Location

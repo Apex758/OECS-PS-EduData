@@ -3,7 +3,7 @@ import fs from "fs/promises";
 import path from "path";
 
 const OUT_DIR = path.join(process.cwd(), "data", "output");
-const ENTITIES = ["staff", "institution"];
+const ENTITIES = ["staff", "student", "institution"];
 
 async function readJSON(file) {
   try {

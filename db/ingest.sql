@@ -49,23 +49,20 @@ create table if not exists student_mapping (
 create index if not exists idx_mapping_school on student_mapping(school_id);
 
 -- ---------------------------------------------------------------------
--- RLS  --  both new tables hold secrets. Restrict to the admin session
--- role. The ingest endpoint runs its insert txn as app.role='admin'
--- (server-trusted; the API key is what authorizes the specific school).
+-- RLS  --  both tables hold secrets (key hashes, RULI<->PII mapping). Only
+-- service_role (server-trusted ingest/admin, BYPASSRLS) ever touches them.
+-- RLS is enabled with NO policy for `authenticated`, so even a leaked end-user
+-- JWT sees zero rows. The API key (hashed) is what authorizes the school.
 -- ---------------------------------------------------------------------
 alter table school_api_keys enable row level security;
 alter table school_api_keys force  row level security;
 drop policy if exists api_keys_admin on school_api_keys;
-create policy api_keys_admin on school_api_keys
-  for all using (current_setting('app.role', true) = 'admin');
 
 alter table student_mapping enable row level security;
 alter table student_mapping force  row level security;
 drop policy if exists student_mapping_admin on student_mapping;
-create policy student_mapping_admin on student_mapping
-  for all using (current_setting('app.role', true) = 'admin');
 
--- App role grants (RLS still gates row visibility).
-grant select, insert, update, delete on school_api_keys to app_client;
-grant select, insert, update, delete on student_mapping to app_client;
-grant usage, select on all sequences in schema public to app_client;
+-- Server-trusted role only; do NOT grant these to authenticated/anon.
+grant select, insert, update, delete on school_api_keys to service_role;
+grant select, insert, update, delete on student_mapping to service_role;
+grant usage, select on all sequences in schema public to service_role;

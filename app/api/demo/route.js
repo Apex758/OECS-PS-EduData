@@ -9,11 +9,18 @@ const OUT_DIR = path.join(process.cwd(), "data", "output");
 // All values are strings (matching CSV-parsed input the pipeline expects).
 // PII fields (surname, first_name, date_of_birth, nationality) go to mapping only.
 //
+// NOTE on codes: the human-readable values below (classification "PR"/"TT",
+// highest_qualification "PhD"/"Masters"/...) are NOT the canonical RMR codes.
+// lib/valueAliases.js normalizes them on the way in (e.g. PR->PRIN, TT->LECT,
+// PhD->PHD, Masters->MAST, PostGradDiploma->PGD, Bachelors->BACH, Diploma->DIP),
+// so stored records carry RMR codes and the SDG math (MIN_QUALIFICATIONS in
+// RMR codes) still computes. No need to edit the rows by hand.
+//
 // SEEDED DISCREPANCIES (for the flag -> approve demo): 4 Monroe College LC rows
 // carry sex="Male"/"Female" (Nestor, Thomas = Male; Odlum, Quashie = Female).
-// Those full words are intentionally OMITTED from lib/valueAliases.js, so the
-// pipeline rejects them as not_in_options -> they surface as suggestions an
-// admin approves (Male->M / Female->F). Everything else is already canonical.
+// Those full words are intentionally OMITTED from staff sex aliases in
+// lib/valueAliases.js, so the pipeline rejects them as not_in_options -> they
+// surface as suggestions an admin approves (Male->M / Female->F).
 const DEMO_ROWS = [
   // --- Kingston Community College, Jamaica (12) ---
   { institution:"Kingston Community College", territory:"Jamaica", surname:"Brown", first_name:"Sophia", sex:"F", classification:"PR", highest_qualification:"PhD", years_experience:"18", cpd_hours:"45", left_service:"N", appraised:"Y", date_of_birth:"1972-04-12", nationality:"Jamaican", teacher_type:"Full Time", subjects:"Educational Leadership", area_of_specialisation:"Educational Leadership", total_periods:"15" },

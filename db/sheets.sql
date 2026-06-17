@@ -21,12 +21,11 @@ create table if not exists school_sheets (
 );
 create index if not exists idx_sheets_enabled on school_sheets(enabled);
 
--- secrets-ish (which schools, which sheets) -> admin-only, like the rest.
+-- secrets-ish (which schools, which sheets) -> service_role only, like the
+-- rest of the ingest layer. RLS on, no policy for authenticated = default deny.
 alter table school_sheets enable row level security;
 alter table school_sheets force  row level security;
 drop policy if exists school_sheets_admin on school_sheets;
-create policy school_sheets_admin on school_sheets
-  for all using (current_setting('app.role', true) = 'admin');
 
-grant select, insert, update, delete on school_sheets to app_client;
-grant usage, select on all sequences in schema public to app_client;
+grant select, insert, update, delete on school_sheets to service_role;
+grant usage, select on all sequences in schema public to service_role;

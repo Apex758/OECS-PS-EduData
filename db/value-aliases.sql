@@ -21,6 +21,8 @@ create table if not exists value_aliases (
 );
 create index if not exists idx_value_aliases_lookup on value_aliases(entity, field);
 
--- UPDATE is needed for the upsert's ON CONFLICT DO UPDATE path.
-grant select, insert, update, delete on value_aliases to app_client;
-grant usage, select on all sequences in schema public to app_client;
+-- Accessed only server-side (the ingest pipeline + admin portal run under
+-- service_role). No grant to authenticated/anon, so end users can't read or
+-- write the alias table via PostgREST. UPDATE supports the upsert path.
+grant select, insert, update, delete on value_aliases to service_role;
+grant usage, select on all sequences in schema public to service_role;
