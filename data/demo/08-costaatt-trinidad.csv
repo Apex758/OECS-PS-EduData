@@ -1,0 +1,13 @@
+institution,territory,surname,first_name,sex,classification,highest_qualification,years_experience,training_hours,left_service,appraised,date_of_birth,nationality,teacher_type,subjects,area_of_specialisation,total_periods
+COSTAATT,Trinidad and Tobago,Achong,Priya,F,PR,PhD,22,50,N,Y,1968-07-15,Trinidadian,Full Time,Business Administration,Business & Finance,12
+COSTAATT,Trinidad and Tobago,Baptiste,Rhondal,M,Vice Principal,Masters,16,36,N,Y,1974-11-28,Trinidadian,Full Time,Management,Business & Finance,16
+COSTAATT,Trinidad and Tobago,Chatoor,Kavitha,F,HOD,Masters,12,26,N,Y,1978-03-19,Trinidadian,Full Time,Accounting,Business & Finance,24
+COSTAATT,Trinidad and Tobago,Dindial,Rishi,M,Head of Department,Bachelors,8,16,N,Y,1982-08-01,Trinidadian,Full Time,Computer Science,Technology,26
+COSTAATT,Trinidad and Tobago,Emmanuel,Lakeisha,F,TT,Bachelors,6,12,N,Y,1984-12-14,Trinidadian,Full Time,Mathematics,STEM,28
+COSTAATT,Trinidad and Tobago,Farray,Carlton,M,TT,PostGradDiploma,4,8,N,N,1986-05-08,Trinidadian,Full Time,Economics,Business & Finance,28
+COSTAATT,Trinidad and Tobago,Gobin,Anita,F,TT,Bachelors,3,6,N,N,1987-09-22,Trinidadian,Full Time,Sociology,Social Sciences,28
+COSTAATT,Trinidad and Tobago,Hector,Fabian,M,TT,Diploma,2,0,N,N,1988-02-11,Trinidadian,Part Time,Technical Drawing,Technology,16
+COSTAATT,Trinidad and Tobago,Ibrahim,Zainab,F,TT,Masters,20,42,N,Y,1970-06-28,Trinidadian,Full Time,English Language,Humanities,22
+COSTAATT,Trinidad and Tobago,Julien,Darryl,M,TT,Bachelors,7,14,N,Y,1983-10-05,Trinidadian,Full Time,Physics,STEM,28
+COSTAATT,Trinidad and Tobago,Khan,Reshma,F,Trained Teacher,PostGradDiploma,5,10,Y,Y,1985-04-17,Trinidadian,Full Time,Biology,STEM,26
+COSTAATT,Trinidad and Tobago,Lopez,Rondell,M,TT,CAPE,1,4,N,N,1989-07-31,Trinidadian,Contract,Media Studies,Humanities,20

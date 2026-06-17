@@ -1,0 +1,13 @@
+institution,territory,surname,first_name,sex,classification,qualification,years_experience,cpd_hours,left_service,appraised,date_of_birth,nationality,teacher_type,subjects,area_of_specialisation,total_periods
+Sir Arthur Lewis Community College,Saint Lucia,Augustin,Marie,F,PR,PhD,23,48,N,Y,1967-07-14,Saint Lucian,Full Time,Educational Administration,Educational Leadership,12
+Sir Arthur Lewis Community College,Saint Lucia,Cornibert,Andre,M,Vice-Principal,Masters,17,38,N,Y,1973-11-27,Saint Lucian,Full Time,Economics,Business & Finance,16
+Sir Arthur Lewis Community College,Saint Lucia,Gustave,Sandra,F,HOD,Masters,13,27,N,Y,1977-04-09,Saint Lucian,Full Time,Biology,STEM,22
+Sir Arthur Lewis Community College,Saint Lucia,Mathurin,Lennox,M,HOD,Bachelors,9,16,N,Y,1981-08-20,Saint Lucian,Full Time,Physics,STEM,26
+Sir Arthur Lewis Community College,Saint Lucia,Popo,Kezia,F,TT,PostGradDiploma,6,14,N,Y,1984-01-03,Saint Lucian,Full Time,French,Languages,30
+Sir Arthur Lewis Community College,Saint Lucia,Compton,Clive,M,TT,Bachelors,4,7,N,N,1986-05-16,Saint Lucian,Full Time,History,Social Sciences,28
+Sir Arthur Lewis Community College,Saint Lucia,Emmanuel,Angela,F,TT,Bachelors,8,20,N,Y,1982-10-31,Saint Lucian,Full Time,Information Technology,Technology,28
+Sir Arthur Lewis Community College,Saint Lucia,Fevrier,Marcus,M,Head of Dept,Diploma,2,0,N,N,1988-07-08,Saint Lucian,Part Time,Art & Design,Creative Arts,16
+Sir Arthur Lewis Community College,Saint Lucia,George,Karen,F,TT,Masters,25,45,N,Y,1965-03-22,Saint Lucian,Full Time,English Literature,Humanities,24
+Sir Arthur Lewis Community College,Saint Lucia,Hippolyte,Wayne,M,TT,Bachelors,5,10,N,Y,1985-11-14,Saint Lucian,Full Time,Mathematics,STEM,30
+Sir Arthur Lewis Community College,Saint Lucia,Inglis,Donna,F,TT,PostGradDiploma,3,8,Y,N,1987-06-05,Saint Lucian,Full Time,Social Studies,Social Sciences,26
+Sir Arthur Lewis Community College,Saint Lucia,Jn Baptiste,Ricardo,M,TT,CAPE,1,4,N,N,1989-02-19,Saint Lucian,Contract,Physical Education,Health Sciences,20

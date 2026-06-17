@@ -1,0 +1,49 @@
+  ▲ Next.js 14.2.5
+  - Local:        http://localhost:3000
+  - Environments: .env.local
+
+ ✓ Starting...
+ ✓ Ready in 5.7s
+ ○ Compiling /api/personas ...
+ ✓ Compiled /api/personas in 1452ms (56 modules)
+ GET /api/personas 200 in 2098ms
+ ○ Compiling / ...
+ ✓ Compiled / in 9.6s (1485 modules)
+ GET / 200 in 8411ms
+ GET / 200 in 9959ms
+ ○ Compiling /admin/access ...
+ ✓ Compiled /admin/access in 5s (1491 modules)
+ GET /admin/access 200 in 5196ms
+ ✓ Compiled /admin/validation in 429ms (1497 modules)
+ GET /admin/validation 200 in 545ms
+ ○ Compiling /api/admin/value-aliases ...
+ ✓ Compiled /api/admin/value-aliases in 928ms (887 modules)
+ POST /api/admin/value-aliases 400 in 1136ms
+ GET /api/admin/value-aliases?entity=staff 200 in 78ms
+ ✓ Compiled /_not-found in 275ms (1106 modules)
+ POST /api/admin/value-aliases 404 in 377ms
+ GET /api/admin/value-aliases?entity=staff 404 in 35ms
+ ✓ Compiled in 23ms
+ ✓ Compiled in 145ms (730 modules)
+ ✓ Compiled in 613ms (730 modules)
+ ✓ Compiled in 134ms (730 modules)
+ ✓ Compiled in 234ms (730 modules)
+ ✓ Compiled in 248ms (730 modules)
+ ✓ Compiled in 184ms (730 modules)
+ ✓ Compiled in 148ms (730 modules)
+ ✓ Compiled in 87ms (730 modules)
+ ✓ Compiled in 250ms (730 modules)
+ ✓ Compiled in 263ms (730 modules)
+ ✓ Compiled in 208ms (730 modules)
+ ✓ Compiled in 228ms (730 modules)
+ ✓ Compiled in 150ms (730 modules)
+ ✓ Compiled in 196ms (730 modules)
+ ✓ Compiled in 148ms (730 modules)
+ ✓ Compiled in 190ms (730 modules)
+ ✓ Compiled in 228ms (730 modules)
+ ✓ Compiled in 128ms (730 modules)
+ ✓ Compiled in 144ms (730 modules)
+ ✓ Compiled in 144ms (730 modules)
+ ✓ Compiled in 172ms (730 modules)
+ ✓ Compiled in 148ms (730 modules)
+[?25h

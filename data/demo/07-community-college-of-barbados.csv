@@ -1,0 +1,13 @@
+institution,territory,surname,first_name,sex,classification,highest_qualification,years_experience,cpd_hours,attrition,appraised,date_of_birth,nationality,teacher_type,subjects,area_of_specialisation,total_periods
+Community College of Barbados,Barbados,Mapp,Donna,F,PR,PhD,27,56,N,Y,1963-10-05,Barbadian,Full Time,Educational Leadership,Educational Leadership,10
+Community College of Barbados,Barbados,Niles,Renwick,M,VP,Masters,20,43,N,Y,1970-02-18,Barbadian,Full Time,Economics,Business & Finance,14
+Community College of Barbados,Barbados,Osbourne,Cheryl,F,HOD,Masters,15,32,N,Y,1975-06-29,Barbadian,Full Time,Mathematics,STEM,22
+Community College of Barbados,Barbados,Payne,Selwyn,M,HOD,Bachelors,11,22,N,Y,1979-11-12,Barbadian,Full Time,Physics,STEM,24
+Community College of Barbados,Barbados,Quansah,Janet,F,TT,PostGradDiploma,7,16,N,No,1983-04-08,Barbadian,Full Time,Chemistry,STEM,28
+Community College of Barbados,Barbados,Roach,Alphonso,M,TT,Bachelors,5,10,N,N,1985-09-21,Barbadian,Full Time,History,Social Sciences,28
+Community College of Barbados,Barbados,Skeete,Alicia,F,TT,Bachelors,3,7,N,N,1987-02-14,Barbadian,Full Time,Spanish,Languages,28
+Community College of Barbados,Barbados,Tudor,Reginald,M,TT,Diploma,2,0,N,N,1988-06-26,Barbadian,Part Time,Geography,Social Sciences,16
+Community College of Barbados,Barbados,Utter,Maxine,F,TT,Masters,24,48,N,No,1966-01-17,Barbadian,Full Time,English Literature,Humanities,22
+Community College of Barbados,Barbados,Vaughan,Winston,M,TT,Bachelors,9,18,N,Y,1981-07-04,Barbadian,Full Time,Accounting,Business & Finance,28
+Community College of Barbados,Barbados,Waithe,Serena,F,TT,CAPE,1,4,Y,N,1989-12-20,Barbadian,Contract,Art & Design,Creative Arts,18
+Community College of Barbados,Barbados,Yearwood,Marcus,M,TT,PostGradDiploma,6,14,N,Y,1984-05-07,Barbadian,Full Time,Information Technology,Technology,26

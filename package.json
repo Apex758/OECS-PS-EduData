@@ -1,0 +1,21 @@
+{
+  "name": "oecs-postsec-edudata",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "google-auth-library": "^10.7.0",
+    "lucide-react": "^1.20.0",
+    "next": "14.2.5",
+    "next-auth": "^5.0.0-beta.31",
+    "pg": "^8.21.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "recharts": "^3.8.1",
+    "xlsx": "^0.18.5"
+  }
+}
