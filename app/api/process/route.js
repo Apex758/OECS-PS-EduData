@@ -3,6 +3,7 @@ import fs from "fs/promises";
 import path from "path";
 import { parseUpload } from "@/lib/parseUpload";
 import { parseInstrument } from "@/lib/parseInstrument";
+import { validateEnrolment } from "@/lib/validateEnrolment";
 import { processRows } from "@/lib/ingestPipeline";
 import { listValueAliases, getPendingAliasesForSubmitter, ingestStaff, ingestEnrolment } from "@/lib/db";
 import { getSubmitterIdentity } from "@/lib/submitterIdentity";
@@ -43,9 +44,12 @@ export async function POST(req) {
       periodStart: period.startYear || "",
       periodEnd: period.endYear || "",
     };
+    // Same validation gate the demo uses: split into accepted / rejected so
+    // bad programme rows surface instead of ingesting silently.
+    const { accepted, rejected } = validateEnrolment(parsed.enrolment);
     let outcome;
     try {
-      outcome = await ingestEnrolment({ meta, rows: parsed.enrolment });
+      outcome = await ingestEnrolment({ meta, rows: accepted, rejected });
     } catch (e) {
       return NextResponse.json({ error: `database error: ${e.message}` }, { status: 500 });
     }
@@ -58,7 +62,7 @@ export async function POST(req) {
       accepted: outcome.inserted,
       skipped: outcome.skipped,
       institutionCode: outcome.institution,
-      rejected: [],
+      rejected,
     });
   }
 

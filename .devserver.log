@@ -20,3 +20,26 @@
  GET /api/stats 200 in 5427ms
  ✓ Compiled /api/sdg in 194ms (936 modules)
  GET /api/sdg 200 in 746ms
+ ✓ Compiled in 142ms (751 modules)
+ ✓ Compiled in 370ms (751 modules)
+ ✓ Compiled in 274ms (751 modules)
+ ⨯ ./app/page.js
+Error: 
+  [31mx[0m Expected corresponding JSX closing tag for <>
+      ,-[[36;1;4mC:\Users\LG\Desktop\Projects\student-csv-app\app\page.js[0m:2954:1]
+ [2m2954[0m |           </tbody>
+ [2m2955[0m |         </table>
+ [2m2956[0m |       </Card>
+ [2m2957[0m |     </div>
+      : [31;1m    ^^^^^^[0m
+ [2m2958[0m |   );
+ [2m2959[0m | }
+ [2m2959[0m | 
+      `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./app/page.js
+ ✓ Compiled in 644ms (751 modules)

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { computeEnrolment, computeEnrolmentGroups } from "@/lib/sdgEnrolment";
-import { readEnrolment } from "@/lib/db";
+import { readEnrolment, readEnrolmentRejected } from "@/lib/db";
 
 // Enrolment SDG dashboard source: the T2 programme rows in Postgres. No PII
 // here -- every value is an aggregate count -- so this is a plain rollup.
@@ -17,20 +17,24 @@ const EMPTY = {
   distributions: { byDivision: [], byProgramme: [], byAccreditation: [] },
   byInstitution: [],
   byTerritory: [],
+  rows: [],
+  rejected: [],
 };
 
 export async function GET() {
-  let rows;
+  let rows, rejected;
   try {
-    rows = await readEnrolment();
+    [rows, rejected] = await Promise.all([readEnrolment(), readEnrolmentRejected()]);
   } catch (e) {
     return NextResponse.json({ error: `database error: ${e.message}` }, { status: 500 });
   }
-  if (!rows.length) return NextResponse.json(EMPTY);
+  if (!rows.length && !rejected.length) return NextResponse.json(EMPTY);
 
   return NextResponse.json({
     ...computeEnrolment(rows),                              // global rollup
     byInstitution: computeEnrolmentGroups(rows, "institution"),
     byTerritory: computeEnrolmentGroups(rows, "territory"),
+    rows,        // raw programme rows for the records table (incl. institution, territory, academicYear)
+    rejected,    // failed-validation rows for the rejected view
   });
 }

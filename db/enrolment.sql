@@ -53,6 +53,25 @@ create unique index if not exists uq_enrolment_row
   on enrolment(school_id, academic_year, division, programme);
 
 -- ---------------------------------------------------------------------
+-- REJECTED ROWS  --  programme rows that FAILED validation
+-- (lib/validateEnrolment.js), kept so the dashboard's rejected view
+-- survives reloads. Parallels staff_rejected. No PII here, but service_role
+-- only keeps it off the authenticated read path. Not deduped (append-only).
+-- ---------------------------------------------------------------------
+create table if not exists enrolment_rejected (
+  id            serial primary key,
+  institution   text,
+  academic_year text,
+  data          jsonb not null,            -- original programme row
+  errors        jsonb not null,            -- validation errors [{field,message}]
+  created_at    timestamptz not null default now()
+);
+create index if not exists idx_enrolment_rejected_created on enrolment_rejected(created_at);
+alter table enrolment_rejected enable row level security;
+alter table enrolment_rejected force  row level security;
+grant select, insert, update, delete on enrolment_rejected to service_role;
+
+-- ---------------------------------------------------------------------
 -- RLS  --  mirrors staff (JWT / app_current_user() model). No PII, but we
 -- scope the same way so an institution sees only its own rows and a
 -- minister only their territory.
@@ -104,14 +123,20 @@ $$;
 -- ---------------------------------------------------------------------
 -- ingest_enrolment  --  KEYLESS, server-trusted browser upload. Resolves the
 -- institution to the hierarchy, then upserts one row per programme.
--- p_meta: { institution, academicYear, periodStart, periodEnd }
+-- p_meta: { institution, territory?, academicYear, periodStart, periodEnd }
+--   When territory is present (the demo carries it; the instrument doesn't),
+--   resolve country FROM it and create the school under it -- so territory
+--   grouping works. Without it, fall back to name-only resolution.
 -- p_rows: [{ division, certification, programme, accredited, isTvet,
 --            y1m..y4f, totalPtM/F, totalFtM/F, oecsNatM/F,
 --            otherCaricomM/F, otherNatM/F, odaScholarship }]
--- Returns { ok, inserted, skipped, institution:code }
+-- p_rejected: [{ data, errors }] -- failed-validation rows, appended to
+--   enrolment_rejected so the dashboard's rejected view persists.
+-- Returns { ok, inserted, skipped, rejected, institution:code }
 -- ---------------------------------------------------------------------
 drop function if exists ingest_enrolment(jsonb, jsonb);
-create or replace function ingest_enrolment(p_meta jsonb, p_rows jsonb)
+drop function if exists ingest_enrolment(jsonb, jsonb, jsonb);
+create or replace function ingest_enrolment(p_meta jsonb, p_rows jsonb, p_rejected jsonb default '[]'::jsonb)
 returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
@@ -122,12 +147,19 @@ declare
   v_pstart   int  := nullif(p_meta->>'periodStart', '')::int;
   v_pend     int  := nullif(p_meta->>'periodEnd', '')::int;
   v_inst     text := nullif(p_meta->>'institution', '');
+  v_terr     text := nullif(p_meta->>'territory', '');
   v_inserted int := 0;
   v_skipped  int := 0;
+  v_rejected int := 0;
   v_code     text;
 begin
-  select o_school_id, o_country_id into v_sid, v_cid
-    from _resolve_school_byname(v_inst);
+  if v_terr is not null then
+    v_cid := _resolve_country(v_terr);
+    v_sid := _resolve_school(v_cid, coalesce(v_inst, 'Unspecified Institution'));
+  else
+    select o_school_id, o_country_id into v_sid, v_cid
+      from _resolve_school_byname(v_inst);
+  end if;
 
   for r in select jsonb_array_elements(coalesce(p_rows, '[]'::jsonb)) loop
     insert into enrolment (
@@ -156,16 +188,24 @@ begin
     else v_skipped := v_skipped + 1; end if;
   end loop;
 
+  -- append failed-validation rows (no dedup; mirrors staff_rejected).
+  for r in select jsonb_array_elements(coalesce(p_rejected, '[]'::jsonb)) loop
+    insert into enrolment_rejected (institution, academic_year, data, errors)
+    values (v_inst, v_year, coalesce(r->'data', '{}'::jsonb), coalesce(r->'errors', '[]'::jsonb));
+    v_rejected := v_rejected + 1;
+  end loop;
+
   select code into v_code from schools where id = v_sid;
   return jsonb_build_object(
-    'ok', true, 'inserted', v_inserted, 'skipped', v_skipped, 'institution', v_code
+    'ok', true, 'inserted', v_inserted, 'skipped', v_skipped,
+    'rejected', v_rejected, 'institution', v_code
   );
 end;
 $$;
 
 revoke all on function _resolve_school_byname(text)  from public;
-revoke all on function ingest_enrolment(jsonb, jsonb) from public;
-grant execute on function ingest_enrolment(jsonb, jsonb) to service_role;
+revoke all on function ingest_enrolment(jsonb, jsonb, jsonb) from public;
+grant execute on function ingest_enrolment(jsonb, jsonb, jsonb) to service_role;
 
 -- ---------------------------------------------------------------------
 -- Aggregate stats IGNORING RLS (SECURITY DEFINER) -- true per-institution

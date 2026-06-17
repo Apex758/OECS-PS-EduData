@@ -2767,6 +2767,8 @@ function EnrolmentDashboard({ view = "institution" }) {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sel, setSel] = useState(null);
+  const [recTab, setRecTab] = useState("stats");   // stats | records
+  const [seeding, setSeeding] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -2783,17 +2785,38 @@ function EnrolmentDashboard({ view = "institution" }) {
     }
   }, []);
 
+  // Populate the DB with synthetic instrument data (Cover/Background/Enrolment).
+  const seedDemo = useCallback(async () => {
+    setSeeding(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/demo", { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) setError(json.error || "Failed to generate demo data");
+      else await load();
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setSeeding(false);
+    }
+  }, [load]);
+
   useEffect(() => { load(); }, [load]);
 
   if (loading) return <Card><span style={{ color: COLORS.muted }}>Loading…</span></Card>;
   if (error) return <Card style={{ background: COLORS.errBg, borderColor: COLORS.errBorder }}><span style={{ color: COLORS.errText }}>{error}</span></Card>;
-  if (!data || data.count === 0) {
+  if (!data || (data.count === 0 && !(data.rejected || []).length)) {
     return (
       <Card>
-        <p style={{ color: COLORS.muted, margin: 0, fontSize: 14 }}>
-          No enrolment data yet. Upload an OECS instrument workbook with the
-          <b> Enrolment</b> data type to populate this view.
-        </p>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+          <p style={{ color: COLORS.muted, margin: 0, fontSize: 14 }}>
+            No enrolment data yet. Upload an OECS instrument workbook with the
+            <b> Enrolment</b> data type — or generate demo data to explore the view.
+          </p>
+          <button onClick={seedDemo} disabled={seeding} style={ghostButton}>
+            {seeding ? "Generating…" : "Generate demo data"}
+          </button>
+        </div>
       </Card>
     );
   }
@@ -2809,6 +2832,18 @@ function EnrolmentDashboard({ view = "institution" }) {
   const divisions = (agg.distributions || data.distributions).byDivision || [];
   const programmes = (agg.distributions || data.distributions).byProgramme || [];
   const maxDiv = Math.max(1, ...divisions.map((d) => d.total));
+
+  // Raw programme rows + rejected, scoped to the selected group (for Records).
+  const keyOfRow = (r) => (view === "ministry" ? (r.territory || "Unspecified") : (r.institution || "Unspecified"));
+  const instTerr = {};
+  for (const r of data.rows || []) instTerr[r.institution] = r.territory;
+  const inScope = (key) => selKey === "__all__" || key === selKey;
+  const scopeRows = (data.rows || []).filter((r) => inScope(keyOfRow(r)));
+  const scopeRejected = (data.rejected || []).filter((rj) =>
+    inScope(view === "ministry" ? (instTerr[rj.institution] || "Unspecified") : rj.institution)
+  );
+  const scopeLabel = selKey === "__all__" ? "OECS-wide" : selKey;
+  const scopeYear = scopeRows[0]?.academicYear || scopeRejected[0]?.academicYear || "";
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 20 }}>
@@ -2832,6 +2867,18 @@ function EnrolmentDashboard({ view = "institution" }) {
         </div>
       </div>
 
+      {/* Stats / Records tabs */}
+      <nav style={{ display: "flex", gap: 4, borderBottom: `1px solid ${COLORS.border}` }}>
+        <TabButton active={recTab === "stats"} onClick={() => setRecTab("stats")}>Stats</TabButton>
+        <TabButton active={recTab === "records"} onClick={() => setRecTab("records")}>
+          Records{scopeRejected.length ? ` · ${scopeRejected.length} rejected` : ""}
+        </TabButton>
+      </nav>
+
+      {recTab === "records" ? (
+        <EnrolmentRecordsTable rows={scopeRows} rejected={scopeRejected} scopeLabel={scopeLabel} academicYear={scopeYear} />
+      ) : (
+      <>
       {/* Headline totals */}
       <Card>
         <div style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
@@ -2907,7 +2954,165 @@ function EnrolmentDashboard({ view = "institution" }) {
           </tbody>
         </table>
       </Card>
+      </>
+      )}
     </div>
+  );
+}
+
+// =====================================================================
+// Raw programme rows (instrument T2 extraction) + rejected view.
+// Collapsed: Programme | Division | Cert | Accredited | TVET | M | F | Total | ODA
+// Expanded: year-of-study, attendance (FT/PT), nationality breakdowns.
+// Header carries the Cover institution + Background academic year.
+// =====================================================================
+function EnrolmentRecordsTable({ rows, rejected, scopeLabel, academicYear }) {
+  const [openIdx, setOpenIdx] = useState(null);
+  const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  const maleOf = (r) => num(r.totalFtM) + num(r.totalPtM);
+  const femaleOf = (r) => num(r.totalFtF) + num(r.totalPtF);
+
+  return (
+    <div style={{ display: "grid", gap: 20, minWidth: 0 }}>
+      <div>
+        <h3 style={{ ...cardTitle, margin: 0 }}>
+          {scopeLabel}{academicYear ? ` — Academic Year ${academicYear}` : ""}
+        </h3>
+        <p style={{ color: COLORS.muted, margin: "4px 0 0", fontSize: 13 }}>
+          {rows.length} programme{rows.length === 1 ? "" : "s"} extracted from the Enrolment sheet.
+        </p>
+      </div>
+
+      <Card style={{ minWidth: 0, overflowX: "auto" }}>
+        {rows.length === 0 ? (
+          <p style={{ color: COLORS.muted, margin: 0, fontSize: 14 }}>No accepted programme rows in this scope.</p>
+        ) : (
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead>
+            <tr style={{ textAlign: "left", color: COLORS.muted }}>
+              <th style={{ ...enrolTh, width: 24 }} aria-label="Expand" />
+              <th style={enrolTh}>Programme</th>
+              <th style={enrolTh}>Division</th>
+              <th style={enrolTh}>Certification</th>
+              <th style={enrolTh}>Accredited</th>
+              <th style={enrolThNum}>TVET</th>
+              <th style={enrolThNum}>M</th>
+              <th style={enrolThNum}>F</th>
+              <th style={enrolThNum}>Total</th>
+              <th style={enrolThNum}>ODA</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r, i) => {
+              const open = openIdx === i;
+              const m = maleOf(r), f = femaleOf(r);
+              return (
+                <Fragment key={i}>
+                  <tr
+                    onClick={() => setOpenIdx(open ? null : i)}
+                    style={{ borderTop: `1px solid ${COLORS.border}`, cursor: "pointer" }}
+                  >
+                    <td style={{ ...enrolTd, color: COLORS.muted }}>
+                      <span style={{ display: "inline-block", transition: "transform 0.25s ease", transform: open ? "rotate(90deg)" : "rotate(0deg)" }}>▸</span>
+                    </td>
+                    <td style={{ ...enrolTd, fontWeight: 500 }}>{r.programme}</td>
+                    <td style={enrolTd}>{r.division || "—"}</td>
+                    <td style={enrolTd}>{r.certification || "—"}</td>
+                    <td style={enrolTd}>{r.accredited || "—"}</td>
+                    <td style={enrolTdNum}>{String(r.isTvet).toUpperCase() === "Y" ? "Y" : "—"}</td>
+                    <td style={enrolTdNum}>{m}</td>
+                    <td style={enrolTdNum}>{f}</td>
+                    <td style={{ ...enrolTdNum, fontWeight: 600 }}>{m + f}</td>
+                    <td style={enrolTdNum}>{num(r.odaScholarship) > 0 ? num(r.odaScholarship) : "—"}</td>
+                  </tr>
+                  <tr style={{ background: open ? COLORS.codeBg : "transparent", transition: "background 0.25s ease" }}>
+                    <td style={{ padding: 0 }} />
+                    <td colSpan={9} style={{ padding: 0 }}>
+                      <div style={{ display: "grid", gridTemplateRows: open ? "1fr" : "0fr", transition: "grid-template-rows 0.3s ease" }}>
+                        <div style={{ overflow: "hidden" }}>
+                          <div style={{ padding: "12px 8px 16px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 }}>
+                            <BreakdownBlock title="Year of study" items={[
+                              ["Year 1", r.y1m, r.y1f], ["Year 2", r.y2m, r.y2f],
+                              ["Year 3", r.y3m, r.y3f], ["Year 4", r.y4m, r.y4f],
+                            ]} />
+                            <BreakdownBlock title="Attendance" items={[
+                              ["Full-time", r.totalFtM, r.totalFtF], ["Part-time", r.totalPtM, r.totalPtF],
+                            ]} />
+                            <BreakdownBlock title="Nationality" items={[
+                              ["OECS", r.oecsNatM, r.oecsNatF],
+                              ["Other CARICOM", r.otherCaricomM, r.otherCaricomF],
+                              ["Other", r.otherNatM, r.otherNatF],
+                            ]} />
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                </Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+        )}
+      </Card>
+
+      {rejected.length > 0 && <EnrolmentRejected rejected={rejected} />}
+    </div>
+  );
+}
+
+// One labelled M/F/Total breakdown column inside an expanded programme row.
+function BreakdownBlock({ title, items }) {
+  const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  return (
+    <div>
+      <div style={{ fontSize: 12, fontWeight: 600, color: COLORS.muted, textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: 6 }}>{title}</div>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        <tbody>
+          {items.map(([label, m, f]) => (
+            <tr key={label}>
+              <td style={{ padding: "3px 8px 3px 0", color: COLORS.muted }}>{label}</td>
+              <td style={{ ...enrolTdNum, padding: "3px 8px" }}>{num(m)} M</td>
+              <td style={{ ...enrolTdNum, padding: "3px 8px" }}>{num(f)} F</td>
+              <td style={{ ...enrolTdNum, padding: "3px 0", fontWeight: 600 }}>{num(m) + num(f)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// Programme rows that failed validation (lib/validateEnrolment.js).
+function EnrolmentRejected({ rejected }) {
+  return (
+    <Card style={{ minWidth: 0, overflowX: "auto", background: COLORS.errBg, borderColor: COLORS.errBorder }}>
+      <h3 style={{ ...cardTitle, color: COLORS.errText }}>Rejected rows ({rejected.length})</h3>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        <thead>
+          <tr style={{ textAlign: "left", color: COLORS.muted }}>
+            <th style={enrolTh}>Programme</th>
+            <th style={enrolTh}>Institution</th>
+            <th style={enrolTh}>Errors</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rejected.map((rj, i) => (
+            <tr key={i} style={{ borderTop: `1px solid ${COLORS.errBorder}` }}>
+              <td style={{ ...enrolTd, fontWeight: 500 }}>{rj.data?.programme || "—"}</td>
+              <td style={enrolTd}>{rj.institution || "—"}</td>
+              <td style={enrolTd}>
+                {(rj.errors || []).map((e, j) => (
+                  <div key={j} style={{ color: COLORS.errText }}>
+                    <b>{e.field}</b>: {e.message}
+                  </div>
+                ))}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Card>
   );
 }
 
