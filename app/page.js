@@ -2099,28 +2099,47 @@ function RejectedTable({ columns, rejected }) {
 // =====================================================================
 function AuthPanel() {
   const { data: session, status } = useSession();
+  const [email, setEmail] = useState("");
+  const [busy, setBusy] = useState(false);
 
   if (status === "loading") {
     return <Card><span style={{ color: COLORS.muted }}>Checking session…</span></Card>;
   }
 
   if (!session) {
+    async function submit(e) {
+      e.preventDefault();
+      if (!email.trim()) return;
+      setBusy(true);
+      await signIn("credentials", { email: email.trim(), redirect: false });
+      setBusy(false);
+    }
     return (
       <Card>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+        <form onSubmit={submit} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
           <div>
-            <h3 style={{ ...cardTitle, marginBottom: 4 }}>Single sign-on</h3>
+            <h3 style={{ ...cardTitle, marginBottom: 4 }}>Sign in</h3>
             <p style={{ color: COLORS.muted, margin: 0, fontSize: 15 }}>
-              Sign in with Auth0 for real access + refresh tokens and role-based access.
+              Enter a provisioned email — your role comes from app_users (role-based access + RLS).
             </p>
           </div>
-          <button onClick={() => signIn("auth0")} style={{
-            background: COLORS.accent, color: "#fff", border: "none",
-            borderRadius: 8, padding: "10px 20px", fontSize: 14, fontWeight: 500, cursor: "pointer",
-          }}>
-            Sign in with Auth0
-          </button>
-        </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@ministry.gov"
+              style={{ ...inputStyle, minWidth: 220 }}
+            />
+            <button type="submit" disabled={busy} style={{
+              background: busy ? COLORS.disabled : COLORS.accent, color: "#fff", border: "none",
+              borderRadius: 8, padding: "10px 20px", fontSize: 14, fontWeight: 500,
+              cursor: busy ? "default" : "pointer",
+            }}>
+              {busy ? "Signing in…" : "Sign in"}
+            </button>
+          </div>
+        </form>
       </Card>
     );
   }

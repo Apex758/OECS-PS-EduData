@@ -16,25 +16,31 @@
 // refresh token server-side ONLY. Do not copy this part to prod.
 // =====================================================================
 import NextAuth from "next-auth";
-// import Auth0 from "next-auth/providers/auth0";   // TEMP: disabled until AUTH0_CLIENT_ID/SECRET set
+import Credentials from "next-auth/providers/credentials";
+// import Auth0 from "next-auth/providers/auth0";   // optional broker, not needed for the demo
 import { resolveUserByEmail } from "@/lib/db";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
   providers: [
-    // TEMP: Auth0 disabled — empty AUTH0_CLIENT_ID/SECRET caused 500 on /api/auth/session.
-    // Re-enable by uncommenting the import above + this block once credentials are set.
+    // Email-only sign-in (no external IdP). The email IS the identity:
+    // app_users provisioning decides the role. Any email signs in; an
+    // un-provisioned one gets appRole=null (the UI shows "not provisioned").
+    // DEMO ONLY — no password. Swap in Auth0/Google for a real IdP later.
+    Credentials({
+      name: "Email",
+      credentials: { email: { label: "Email", type: "email" } },
+      async authorize(creds) {
+        const email = String(creds?.email || "").trim().toLowerCase();
+        if (!email || !email.includes("@")) return null;
+        return { id: email, email };
+      },
+    }),
     // Auth0({
     //   clientId: process.env.AUTH0_CLIENT_ID,
     //   clientSecret: process.env.AUTH0_CLIENT_SECRET,
-    //   issuer: process.env.AUTH0_ISSUER,   // https://YOUR_TENANT.<region>.auth0.com
-    //   authorization: {
-    //     params: {
-    //       // offline_access = the OIDC way to get a refresh token from Auth0.
-    //       scope: "openid profile email offline_access",
-    //       prompt: "consent",
-    //     },
-    //   },
+    //   issuer: process.env.AUTH0_ISSUER,
+    //   authorization: { params: { scope: "openid profile email offline_access", prompt: "consent" } },
     // }),
   ],
   callbacks: {
@@ -70,12 +76,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       session.user.role = token.appRole ?? null;
       session.user.countryId = token.countryId ?? null;
       session.user.canDrill = token.canDrill;
-      // DEMO-ONLY: expose provider tokens for the token panel.
-      session.tokens = {
-        accessToken: token.accessToken ?? null,
-        refreshToken: token.refreshToken ?? null,
-        expiresAt: token.expiresAt ?? null,
-      };
+      // DEMO-ONLY: expose provider tokens for the token panel. Credentials
+      // login has none -> null so the panel hides.
+      session.tokens = token.accessToken
+        ? {
+            accessToken: token.accessToken,
+            refreshToken: token.refreshToken ?? null,
+            expiresAt: token.expiresAt ?? null,
+          }
+        : null;
       return session;
     },
   },

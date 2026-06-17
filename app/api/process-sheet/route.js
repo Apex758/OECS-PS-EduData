@@ -5,7 +5,7 @@ import { toMatrix, matrixToRecords } from "@/lib/csv";
 import { findHeaderRowIndex } from "@/lib/headerAliases";
 import { fetchSheetRows } from "@/lib/sheets";
 import { processRows } from "@/lib/ingestPipeline";
-import { listValueAliases, getPendingAliasesForSubmitter } from "@/lib/db";
+import { listValueAliases, getPendingAliasesForSubmitter, ingestStaff } from "@/lib/db";
 import { getSubmitterIdentity } from "@/lib/submitterIdentity";
 
 // Google Sheets path for the local-dev browser upload. Mirrors /api/process
@@ -107,6 +107,37 @@ export async function POST(req) {
     return NextResponse.json(result.batchError, { status: 422 });
   }
 
+  const alreadyPending = new Set(
+    pendingForSubmitter.map((p) => `${p.field}=${p.variant}`)
+  );
+
+  // Staff (T10) -> Postgres via the keyless RPC (same as /api/process). The
+  // on-disk path below is local-dev only and fails on serverless.
+  if (entity === "staff") {
+    let outcome;
+    try {
+      outcome = await ingestStaff({ items: result.accepted, rejected: result.rejected });
+    } catch (e) {
+      return NextResponse.json({ error: `database error: ${e.message}` }, { status: 500 });
+    }
+    return NextResponse.json({
+      ok: true,
+      entity,
+      source,
+      total: result.total,
+      accepted: outcome.inserted,
+      skipped: outcome.skipped,
+      institutions: outcome.institutions,
+      rejected: result.rejected,
+      headerAliasesApplied: result.headerAliasesApplied,
+      valueAliasesApplied: result.valueAliasesApplied,
+      dateNormalizationApplied: result.dateNormalizationApplied,
+      suggestedAliases: result.suggestedAliases,
+      alreadyPending: [...alreadyPending],
+      headerWarnings: result.headerWarnings,
+    });
+  }
+
   const newRecords = result.accepted.map((a) => a.record);
   const newMapping = result.accepted.map((a) => a.mapping);
   const newRejected = result.rejected;
@@ -126,10 +157,6 @@ export async function POST(req) {
   await fs.writeFile(recPath, JSON.stringify([...existingRec, ...newRecords], null, 2), "utf8");
   await fs.writeFile(mapPath, JSON.stringify([...existingMap, ...newMapping], null, 2), "utf8");
   await fs.writeFile(rejPath, JSON.stringify([...existingRej, ...newRejected], null, 2), "utf8");
-
-  const alreadyPending = new Set(
-    pendingForSubmitter.map((p) => `${p.field}=${p.variant}`)
-  );
 
   return NextResponse.json({
     ok: true,

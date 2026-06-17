@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
-import { clearValueAliases, clearPendingAliases } from "@/lib/db";
+import { clearValueAliases, clearPendingAliases, clearStaff } from "@/lib/db";
 
 const OUT_DIR = path.join(process.cwd(), "data", "output");
 const ENTITIES = ["student", "staff", "institution"];
@@ -38,6 +38,9 @@ export async function POST() {
   let dbError = null;
   try {
     await fs.mkdir(OUT_DIR, { recursive: true });
+    // Wipe the staff table too (Postgres is now the source of truth for the
+    // dashboard, not the on-disk JSON above).
+    await clearStaff();
     const [aliasSnapshot, pendingSnapshot] = await Promise.all([
       clearValueAliases(),
       clearPendingAliases(),

@@ -1,5 +1,8 @@
 import fs from "fs/promises";
 import path from "path";
+import { readStaffRecords, readStaffMapping } from "@/lib/db";
+
+export const runtime = "nodejs";
 
 const OUT_DIR = path.join(process.cwd(), "data", "output");
 const ENTITIES = ["staff", "student", "institution"];
@@ -15,6 +18,26 @@ export async function GET(req) {
       status: 400,
       headers: { "content-type": "application/json" },
     });
+  }
+
+  // Staff is Postgres-backed -> rebuild the records/mapping JSON from the DB.
+  if (entity === "staff") {
+    try {
+      const payload = type === "records"
+        ? await readStaffRecords()
+        : Object.values(await readStaffMapping());
+      return new Response(JSON.stringify(payload, null, 2), {
+        status: 200,
+        headers: {
+          "content-type": "application/json",
+          "content-disposition": `attachment; filename="${entity}-${type}.json"`,
+        },
+      });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: `database error: ${e.message}` }), {
+        status: 500, headers: { "content-type": "application/json" },
+      });
+    }
   }
 
   const file = path.join(OUT_DIR, `${entity}-${type}.json`);

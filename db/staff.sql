@@ -71,6 +71,27 @@ create table if not exists staff_mapping (
 create index if not exists idx_staff_mapping_school on staff_mapping(school_id);
 
 -- ---------------------------------------------------------------------
+-- 2b. REJECTED ROWS  --  staff rows that FAILED validation, kept so the
+--     dashboard's "rejected" view survives reloads (the on-disk path used to
+--     append these to staff-rejected.json). Holds the RAW uploaded row, which
+--     may include PII -> service_role only, no authenticated policy. Not
+--     deduped (matches the old append behaviour).
+-- ---------------------------------------------------------------------
+create table if not exists staff_rejected (
+  id           serial primary key,
+  institution  text,
+  territory    text,
+  data         jsonb not null,            -- original row as uploaded
+  errors       jsonb not null,            -- validation errors
+  created_at   timestamptz not null default now()
+);
+create index if not exists idx_staff_rejected_created on staff_rejected(created_at);
+alter table staff_rejected enable row level security;
+alter table staff_rejected force  row level security;
+drop policy if exists staff_rejected_admin on staff_rejected;
+grant select, insert, update, delete on staff_rejected to service_role;
+
+-- ---------------------------------------------------------------------
 -- 3. RLS  --  staff mirrors the students policy (JWT / app_current_user()
 --    model). staff_mapping holds PII -> service_role only, no authenticated
 --    policy (zero rows even with a leaked end-user session).
@@ -202,9 +223,13 @@ $$;
 --              subjects, total_periods, years_experience, highest_qualification,
 --              area_of_specialisation, cpd_hours, appraised, left_service, sex,
 --              metadata, identity_hash, salt, sensitive }]
---    Returns { ok, inserted, skipped, institutions:[codes] }
+--    p_rejected: [{ data, errors }] -- rows that failed validation, appended
+--                to staff_rejected so the dashboard's rejected view persists.
+--    Returns { ok, inserted, skipped, rejected, institutions:[codes] }
 -- ---------------------------------------------------------------------
-create or replace function ingest_staff(p_rows jsonb)
+-- signature grew a param (p_rejected) -> drop the old one first.
+drop function if exists ingest_staff(jsonb);
+create or replace function ingest_staff(p_rows jsonb, p_rejected jsonb default '[]'::jsonb)
 returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
@@ -213,6 +238,7 @@ declare
   v_sid      int;
   v_inserted int := 0;
   v_skipped  int := 0;
+  v_rejected int := 0;
   v_codes    text[] := '{}';
   v_code     text;
 begin
@@ -250,14 +276,24 @@ begin
     end if;
   end loop;
 
+  -- append failed-validation rows (no dedup; mirrors the old disk append).
+  for r in select jsonb_array_elements(coalesce(p_rejected, '[]'::jsonb)) loop
+    insert into staff_rejected (institution, territory, data, errors)
+    values (
+      nullif(r->'data'->>'institution', ''), nullif(r->'data'->>'territory', ''),
+      coalesce(r->'data', '{}'::jsonb), coalesce(r->'errors', '[]'::jsonb)
+    );
+    v_rejected := v_rejected + 1;
+  end loop;
+
   return jsonb_build_object(
     'ok', true, 'inserted', v_inserted, 'skipped', v_skipped,
-    'institutions', to_jsonb(v_codes)
+    'rejected', v_rejected, 'institutions', to_jsonb(v_codes)
   );
 end;
 $$;
 
-revoke all on function _resolve_country(text)     from public;
-revoke all on function _resolve_school(int, text)  from public;
-revoke all on function ingest_staff(jsonb)        from public;
-grant execute on function ingest_staff(jsonb)     to service_role;
+revoke all on function _resolve_country(text)      from public;
+revoke all on function _resolve_school(int, text)   from public;
+revoke all on function ingest_staff(jsonb, jsonb)  from public;
+grant execute on function ingest_staff(jsonb, jsonb) to service_role;

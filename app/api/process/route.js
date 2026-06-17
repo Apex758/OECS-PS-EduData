@@ -3,7 +3,7 @@ import fs from "fs/promises";
 import path from "path";
 import { parseUpload } from "@/lib/parseUpload";
 import { processRows } from "@/lib/ingestPipeline";
-import { listValueAliases, getPendingAliasesForSubmitter } from "@/lib/db";
+import { listValueAliases, getPendingAliasesForSubmitter, ingestStaff } from "@/lib/db";
 import { getSubmitterIdentity } from "@/lib/submitterIdentity";
 
 // Local-dev path: browser upload -> coded JSON files on disk.
@@ -48,6 +48,39 @@ export async function POST(req) {
     return NextResponse.json(result.batchError, { status: 422 });
   }
 
+  // Keys of suggestions already pending for this uploader so the UI can
+  // show "Awaiting approval" instead of the submission form.
+  const alreadyPending = new Set(
+    pendingForSubmitter.map((p) => `${p.field}=${p.variant}`)
+  );
+
+  // ---- Staff (T10): persist to Postgres via the keyless server-trusted RPC.
+  // (The legacy on-disk path below is local-dev only and fails on read-only
+  // serverless filesystems; staff is the production entity.)
+  if (entity === "staff") {
+    let outcome;
+    try {
+      outcome = await ingestStaff({ items: result.accepted, rejected: result.rejected });
+    } catch (e) {
+      return NextResponse.json({ error: `database error: ${e.message}` }, { status: 500 });
+    }
+    return NextResponse.json({
+      ok: true,
+      entity,
+      total: result.total,
+      accepted: outcome.inserted,           // new staff written
+      skipped: outcome.skipped,             // duplicates (already ingested)
+      institutions: outcome.institutions,   // resolved school codes touched
+      rejected: result.rejected,            // failed validation
+      headerAliasesApplied: result.headerAliasesApplied,
+      valueAliasesApplied: result.valueAliasesApplied,
+      dateNormalizationApplied: result.dateNormalizationApplied,
+      suggestedAliases: result.suggestedAliases,
+      alreadyPending: [...alreadyPending],
+      headerWarnings: result.headerWarnings,
+    });
+  }
+
   // unbundle the shared pipeline output into the two file shapes
   const newRecords = result.accepted.map((a) => a.record);
   const newMapping = result.accepted.map((a) => a.mapping);
@@ -73,12 +106,6 @@ export async function POST(req) {
   await fs.writeFile(recPath, JSON.stringify(records, null, 2), "utf8");
   await fs.writeFile(mapPath, JSON.stringify(mapping, null, 2), "utf8");
   await fs.writeFile(rejPath, JSON.stringify(rejected, null, 2), "utf8");
-
-  // Keys of suggestions already pending for this uploader so the UI can
-  // show "Awaiting approval" instead of the submission form.
-  const alreadyPending = new Set(
-    pendingForSubmitter.map((p) => `${p.field}=${p.variant}`)
-  );
 
   return NextResponse.json({
     ok: true,
