@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import { parseUpload } from "@/lib/parseUpload";
-import { parseInstrument } from "@/lib/parseInstrument";
+import { parseInstrument, isInstrumentWorkbook } from "@/lib/parseInstrument";
 import { validateEnrolment } from "@/lib/validateEnrolment";
 import { processRows } from "@/lib/ingestPipeline";
 import { listValueAliases, getPendingAliasesForSubmitter, ingestStaff, ingestEnrolment } from "@/lib/db";
@@ -15,10 +15,20 @@ const OUT_DIR = path.join(process.cwd(), "data", "output");
 export async function POST(req) {
   const form = await req.formData();
   const file = form.get("file");
-  const entity = String(form.get("entity") || "student");
+  let entity = String(form.get("entity") || "student");
 
   if (!file || typeof file === "string") {
     return NextResponse.json({ error: "no file uploaded" }, { status: 400 });
+  }
+
+  // Read the bytes once; reused by every parser below.
+  const buf = Buffer.from(await file.arrayBuffer());
+
+  // Auto-route: an instrument workbook (Cover/Background/Enrolment sheets) is
+  // processed as enrolment even if the Data type dropdown says staff/student,
+  // so a drop-in isn't silently misread as a flat table.
+  if (entity !== "enrolment" && /\.xlsx?$/i.test(file.name || "") && isInstrumentWorkbook(buf)) {
+    entity = "enrolment";
   }
 
   // ---- Enrolment (instrument T2): a multi-sheet workbook, not a flat table.
@@ -27,7 +37,6 @@ export async function POST(req) {
   if (entity === "enrolment") {
     let parsed;
     try {
-      const buf = Buffer.from(await file.arrayBuffer());
       parsed = parseInstrument(buf);
     } catch (e) {
       return NextResponse.json({ error: `could not read instrument: ${e.message}` }, { status: 400 });
@@ -68,7 +77,6 @@ export async function POST(req) {
 
   let rawRows;
   try {
-    const buf = Buffer.from(await file.arrayBuffer());
     rawRows = parseUpload(buf, file.name, entity);
   } catch (e) {
     return NextResponse.json({ error: `could not read file: ${e.message}` }, { status: 400 });
