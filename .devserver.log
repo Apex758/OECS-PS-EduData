@@ -43,3 +43,9 @@ Caused by:
 Import trace for requested module:
 ./app/page.js
  ✓ Compiled in 644ms (751 modules)
+ ✓ Compiled /api/sdg-enrolment in 214ms (177 modules)
+ GET /api/sdg-enrolment 200 in 917ms
+ ✓ Compiled /api/demo in 57ms (181 modules)
+ POST /api/demo 200 in 2873ms
+ GET /api/sdg-enrolment 200 in 645ms
+ GET /api/sdg-enrolment 200 in 437ms
