@@ -60,3 +60,10 @@ Import trace for requested module:
  ✓ Compiled /api/clear in 31ms (182 modules)
  POST /api/clear 200 in 1777ms
  POST /api/demo 200 in 2294ms
+ ✓ Compiled /api/process in 457ms (195 modules)
+ POST /api/process 200 in 1139ms
+ POST /api/process 200 in 240ms
+ ✓ Compiled /api/clear in 30ms (197 modules)
+ POST /api/clear 200 in 1594ms
+ ✓ Compiled /api/demo in 27ms (200 modules)
+ POST /api/demo 200 in 2164ms
