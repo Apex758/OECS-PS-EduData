@@ -1,0 +1,12 @@
+institution,territory,surname,first_name,gender,classification,highest_qualification,years_experience,cpd_hours,left_service,appraised,date_of_birth,nationality,teacher_type,subjects,area_of_specialisation,total_periods
+Anguilla Community College,Anguilla,Browne,Sophia,F,PR,PhD,18,45,N,Y,1972-02-01,Anguillian,Full Time,Educational Leadership,Educational Leadership,12
+Anguilla Community College,Anguilla,Williams,David,M,VP,Masters,14,32,N,Y,1976-03-04,Anguillian,Full Time,Mathematics,STEM,18
+Anguilla Community College,Anguilla,Joseph,Angela,F,HOD,Masters,11,25,N,Y,1979-04-07,Anguillian,Full Time,Nursing,Health Sciences,24
+Anguilla Community College,Anguilla,Charles,Marcus,Male,HOD,Bachelors,9,18,N,Y,1981-05-10,Anguillian,Full Time,Computer Science,Information Technology,28
+Anguilla Community College,Anguilla,Thomas,Karen,F,TT,Bachelors,6,12,N,Y,1984-06-13,Anguillian,Full Time,English Language,Humanities & Education,30
+Anguilla Community College,Anguilla,Lewis,Ricardo,M,TT,PostGradDiploma,4,8,N,N,1986-07-16,Anguillian,Full Time,Civil Engineering,Engineering & Technology,26
+Anguilla Community College,Anguilla,Francis,Donna,Female,TT,Bachelors,7,0,N,Y,1983-08-19,Anguillian,Full Time,Hospitality Management,Hospitality & Tourism,28
+Anguilla Community College,Anguilla,Campbell,Wayne,M,TT,Diploma,3,0,Y,N,1987-09-22,Anguillian,Part Time,Culinary Arts,Hospitality & Tourism,16
+Anguilla Community College,Anguilla,Richards,Maxine,F,TT,PostGradDiploma,5,20,N,Y,1985-10-25,Anguillian,Full Time,Accounting,Business & Management,30
+Anguilla Community College,Anguilla,Robinson,Gerald,male,TT,Masters,22,40,N,Y,1968-11-01,Anguillian,Full Time,Business Administration,Business & Management,28
+Anguilla Community College,Anguilla,Edwards,Patricia,F,TT,Bachelors,1,5,N,N,1989-12-04,Anguillian,Full Time,Medical Laboratory Technology,Health Sciences,24

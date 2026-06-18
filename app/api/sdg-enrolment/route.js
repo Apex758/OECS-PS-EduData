@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { computeEnrolment, computeEnrolmentGroups } from "@/lib/sdgEnrolment";
+import { computeBackground } from "@/lib/sdgBackground";
+import { computeFinance } from "@/lib/sdgFinance";
+import { computeSystem } from "@/lib/sdgSystem";
 import { readEnrolment, readEnrolmentRejected } from "@/lib/db";
 
 // Enrolment SDG dashboard source: the T2 programme rows in Postgres. No PII
@@ -17,6 +20,9 @@ const EMPTY = {
   distributions: { byDivision: [], byProgramme: [], byAccreditation: [] },
   byInstitution: [],
   byTerritory: [],
+  background: { count: 0, indicators: [], institutions: [] },
+  finance: { count: 0, indicators: [], institutions: [] },
+  system: { count: 0, indicators: [], territories: [] },
   rows: [],
   rejected: [],
 };
@@ -34,6 +40,9 @@ export async function GET() {
     ...computeEnrolment(rows),                              // global rollup
     byInstitution: computeEnrolmentGroups(rows, "institution"),
     byTerritory: computeEnrolmentGroups(rows, "territory"),
+    background: computeBackground(rows),                    // SDG 4.a.1 / 4.a.3 from row metadata
+    finance: computeFinance(rows),                          // SDG 4.5.3 / 4.5.4 / 4.c.5 from row metadata
+    system: computeSystem(rows),                            // SDG 4.3.2 GER / 4.5.6 %GDP from row data + reference inputs
     rows,        // raw programme rows for the records table (incl. institution, territory, academicYear)
     rejected,    // failed-validation rows for the rejected view
   });

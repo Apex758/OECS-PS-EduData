@@ -7,9 +7,9 @@ export async function GET() {
   const csv =
     [
       "email,name,role,country_iso,school_codes,can_drill",
-      "# role: teacher | minister | admin. country_iso: JM | LC. school_codes: space/comma separated (teachers). can_drill: yes/no (ministers only).",
-      "teacher1@school.edu.lc,Jane Doe,teacher,LC,LC-S1,",
-      "minister1@gov.jm,John Roe,minister,JM,,yes",
+      "# role: teacher | minister | admin. country_iso: LC | GD | AG (OECS). school_codes: space/comma separated (teachers). can_drill: yes/no (ministers only).",
+      "lecturer1@salcc.edu.lc,Jane Doe,teacher,LC,LC-CC,",
+      "minister1@gov.gd,John Roe,minister,GD,,yes",
     ].join("\n") + "\n";
   return new Response(csv, {
     headers: {

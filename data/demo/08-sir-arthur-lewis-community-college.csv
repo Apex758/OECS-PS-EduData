@@ -1,0 +1,12 @@
+institution,territory,surname,first_name,gender,classification,highest_qualification,years_experience,cpd_hours,left_service,appraised,date_of_birth,nationality,teacher_type,subjects,area_of_specialisation,total_periods
+Sir Arthur Lewis Community College,Saint Lucia,Browne,Sophia,F,PR,PhD,18,45,N,Y,1972-08-01,Saint Lucian,Full Time,Educational Leadership,Educational Leadership,12
+Sir Arthur Lewis Community College,Saint Lucia,Williams,David,M,VP,Masters,14,32,N,Y,1976-09-04,Saint Lucian,Full Time,Mathematics,STEM,18
+Sir Arthur Lewis Community College,Saint Lucia,Joseph,Angela,F,HOD,Masters,11,25,N,Y,1979-10-07,Saint Lucian,Full Time,Nursing,Health Sciences,24
+Sir Arthur Lewis Community College,Saint Lucia,Charles,Marcus,Male,HOD,Bachelors,9,18,N,Y,1981-11-10,Saint Lucian,Full Time,Computer Science,Information Technology,28
+Sir Arthur Lewis Community College,Saint Lucia,Thomas,Karen,F,TT,Bachelors,6,12,N,Y,1984-12-13,Saint Lucian,Full Time,English Language,Humanities & Education,30
+Sir Arthur Lewis Community College,Saint Lucia,Lewis,Ricardo,M,TT,PostGradDiploma,4,8,N,N,1986-01-16,Saint Lucian,Full Time,Civil Engineering,Engineering & Technology,26
+Sir Arthur Lewis Community College,Saint Lucia,Francis,Donna,Female,TT,Bachelors,7,0,N,Y,1983-02-19,Saint Lucian,Full Time,Hospitality Management,Hospitality & Tourism,28
+Sir Arthur Lewis Community College,Saint Lucia,Campbell,Wayne,M,TT,Diploma,3,0,Y,N,1987-03-22,Saint Lucian,Part Time,Culinary Arts,Hospitality & Tourism,16
+Sir Arthur Lewis Community College,Saint Lucia,Richards,Maxine,F,TT,PostGradDiploma,5,20,N,Y,1985-04-25,Saint Lucian,Full Time,Accounting,Business & Management,30
+Sir Arthur Lewis Community College,Saint Lucia,Robinson,Gerald,male,TT,Masters,22,40,N,Y,1968-05-01,Saint Lucian,Full Time,Business Administration,Business & Management,28
+Sir Arthur Lewis Community College,Saint Lucia,Edwards,Patricia,F,TT,Bachelors,1,5,N,N,1989-06-04,Saint Lucian,Full Time,Medical Laboratory Technology,Health Sciences,24

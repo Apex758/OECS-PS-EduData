@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import { toMatrix, matrixToRecords } from "@/lib/csv";
-import { findHeaderRowIndex } from "@/lib/headerAliases";
+import { findHeaderRowIndex, detectEntity } from "@/lib/headerAliases";
 import { fetchSheetRows } from "@/lib/sheets";
 import { processRows } from "@/lib/ingestPipeline";
 import { listValueAliases, getPendingAliasesForSubmitter, ingestStaff } from "@/lib/db";
@@ -47,7 +47,7 @@ async function fetchPublicCsv(id, gid, entity) {
 
 export async function POST(req) {
   const { url, entity: rawEntity } = await req.json().catch(() => ({}));
-  const entity = String(rawEntity || "student");
+  let entity = String(rawEntity || "auto");
 
   const { id, gid } = parseSheetUrl(url);
   if (!id) {
@@ -85,6 +85,11 @@ export async function POST(req) {
 
   if (!Array.isArray(rawRows) || rawRows.length === 0) {
     return NextResponse.json({ error: "the sheet is empty or unreadable" }, { status: 422 });
+  }
+
+  // Auto-identify the record type from the sheet's columns (no dropdown).
+  if (entity === "auto" || !["staff", "student", "institution"].includes(entity)) {
+    entity = detectEntity(Object.keys(rawRows[0])) || "staff";
   }
 
   const submittedBy = getSubmitterIdentity(req);

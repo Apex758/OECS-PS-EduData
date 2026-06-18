@@ -7,8 +7,8 @@
 // Usage (PowerShell):
 //   $env:SEED_DATABASE_URL = "postgres://...";  node db/gen-key.mjs <SCHOOL_CODE> ["label"]
 //
-//   <SCHOOL_CODE>  matches schools.code (e.g. JM-S1)
-//   [label]        optional note, e.g. "Kingston Primary - office PC"
+//   <SCHOOL_CODE>  matches schools.code (e.g. LC-CC)
+//   [label]        optional note, e.g. "Sir Arthur Lewis CC - office PC"
 //
 // Connects as SUPERUSER (SEED_DATABASE_URL) -- school_api_keys has
 // admin-only RLS, so the non-superuser app role can't write keys.

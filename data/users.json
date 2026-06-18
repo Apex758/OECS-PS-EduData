@@ -1,10 +1,10 @@
 {
-  "_comment": "Registered users. Loaded into app_users by db/setup.ps1 (db/seed.mjs). The admin panel (/admin/access) edits the LIVE database; use its Export button to refresh this file. Fields: email, name, role (teacher|minister|admin), country_iso (JM|LC|null for admin), schools (list of school_code, teachers only), can_drill_students (ministers: true=see individual students, false=aggregate counts only).",
+  "_comment": "Registered users. Loaded into app_users by db/setup.ps1 (db/seed.mjs). The admin panel (/admin/access) edits the LIVE database; use its Export button to refresh this file. Fields: email, name, role (teacher|minister|admin), country_iso (OECS ISO e.g. LC|GD|null for admin), schools (list of school_code, teachers only), can_drill_students (ministers: true=see individual students, false=aggregate counts only).",
   "users": [
-    { "email": "admin@demo.local",         "name": "Demo Admin",            "role": "admin",    "country_iso": null, "schools": [],        "can_drill_students": true,  "is_demo": true },
-    { "email": "minister.jm@demo.local",    "name": "Minister (Jamaica)",    "role": "minister", "country_iso": "JM", "schools": [],        "can_drill_students": true,  "is_demo": true },
-    { "email": "minister.lc@demo.local",    "name": "Minister (Saint Lucia)","role": "minister", "country_iso": "LC", "schools": [],        "can_drill_students": false, "is_demo": true },
-    { "email": "teacher.jm.s1@demo.local",  "name": "Teacher Kingston",      "role": "teacher",  "country_iso": "JM", "schools": ["JM-S1"], "can_drill_students": true,  "is_demo": true },
-    { "email": "teacher.lc.s2@demo.local",  "name": "Teacher Vieux Fort",    "role": "teacher",  "country_iso": "LC", "schools": ["LC-S2"], "can_drill_students": true,  "is_demo": true }
+    { "email": "admin@demo.local",         "name": "Demo Admin",                 "role": "admin",    "country_iso": null, "schools": [],         "can_drill_students": true,  "is_demo": true },
+    { "email": "minister.lc@demo.local",    "name": "Minister (Saint Lucia)",     "role": "minister", "country_iso": "LC", "schools": [],         "can_drill_students": true,  "is_demo": true },
+    { "email": "minister.gd@demo.local",    "name": "Minister (Grenada)",         "role": "minister", "country_iso": "GD", "schools": [],         "can_drill_students": false, "is_demo": true },
+    { "email": "lecturer.lc@demo.local",    "name": "Lecturer (Sir Arthur Lewis)","role": "teacher",  "country_iso": "LC", "schools": ["LC-CC"], "can_drill_students": true,  "is_demo": true },
+    { "email": "lecturer.ag@demo.local",    "name": "Lecturer (Antigua State)",   "role": "teacher",  "country_iso": "AG", "schools": ["AG-CC"], "can_drill_students": true,  "is_demo": true }
   ]
 }

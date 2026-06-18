@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import { parseUpload } from "@/lib/parseUpload";
+import { detectEntity } from "@/lib/headerAliases";
 import { parseInstrument, isInstrumentWorkbook } from "@/lib/parseInstrument";
 import { validateEnrolment } from "@/lib/validateEnrolment";
 import { processRows } from "@/lib/ingestPipeline";
@@ -52,6 +53,11 @@ export async function POST(req) {
       academicYear: period.startYear && period.endYear ? `${period.startYear}/${period.endYear}` : (period.raw || ""),
       periodStart: period.startYear || "",
       periodEnd: period.endYear || "",
+      // Background safety/infrastructure facts (1.13–1.18) -> SDG 4.a.1 / 4.a.3.
+      // ingestEnrolment stamps this onto each programme row's metadata.
+      background: parsed.background || null,
+      // Finance facts (T13) -> SDG 4.5.3 / 4.5.4 / 4.c.5. Same metadata ride.
+      finance: parsed.finance || null,
     };
     // Same validation gate the demo uses: split into accepted / rejected so
     // bad programme rows surface instead of ingesting silently.
@@ -73,6 +79,16 @@ export async function POST(req) {
       institutionCode: outcome.institution,
       rejected,
     });
+  }
+
+  // Auto-identify the flat record type when the client didn't pick one (the
+  // "Data type" dropdown is gone). Probe headers with a neutral parse, then
+  // score them against each entity's aliases. Falls back to staff.
+  if (entity === "auto" || !["staff", "student", "institution"].includes(entity)) {
+    let probe = [];
+    try { probe = parseUpload(buf, file.name); } catch { /* unreadable -> fall back */ }
+    const headers = probe.length ? Object.keys(probe[0]) : [];
+    entity = detectEntity(headers) || "staff";
   }
 
   let rawRows;

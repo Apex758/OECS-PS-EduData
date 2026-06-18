@@ -6,50 +6,105 @@
 // model in lib/calculationDocs.js; no fetch, no admin token needed. Colours
 // read CSS theme vars so it works in light and dark.
 
-import { indicatorDocs, distributionDocs, rollupDocs } from "@/lib/calculationDocs";
+import {
+  indicatorDocs, distributionDocs, rollupDocs,
+  enrolmentDocs, backgroundDocs, financeDocs, systemDocs,
+} from "@/lib/calculationDocs";
 import { SDG_COLOURS } from "@/lib/sdgIndicators";
 
-// Map an indicator code (e.g. "4.c.1", "4.5.1") to its colour-key family.
+// Map an indicator code to its colour-key family (covers every SDG-4 indicator
+// the dashboards compute, across staff / enrolment / background / finance /
+// system layers).
+const CODE_COLOURS = {
+  "4.3.2": "#4f8cf7", "4.3.3": "#22d3ee", "4.5.1": "#a78bfa",
+  "4.5.3": "#8b5cf6", "4.5.4": "#0ea5e9", "4.5.5": "#14b8a6", "4.5.6": "#f97316",
+  "4.a.1": "#ec4899", "4.a.3": "#ef4444", "4.b.1": "#f59e0b",
+};
 function codeColour(code) {
-  if (code.startsWith("4.5.1")) return SDG_COLOURS["4.5.1"];
+  if (CODE_COLOURS[code]) return CODE_COLOURS[code];
   if (code.startsWith("4.c")) return SDG_COLOURS["4.c"];
-  if (code.startsWith("4.3.3")) return SDG_COLOURS["4.3.3"];
-  if (code.startsWith("4.3.2")) return SDG_COLOURS["4.3.2"];
+  if (code.startsWith("4.5.1")) return SDG_COLOURS["4.5.1"];
   return "var(--muted)";
+}
+
+// One documented indicator card (code badge, formula, numerator/denominator…).
+function IndicatorItem({ d }) {
+  return (
+    <div style={item}>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+        <CodeBadge code={d.code} />
+        <span style={{ fontWeight: 600, fontSize: 15 }}>{d.title}</span>
+        <Formula text={d.formula} />
+        <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--muted)" }}>unit: {d.unit}</span>
+      </div>
+      <Row label="Top (numerator)" value={d.numerator} />
+      <Row label="Bottom (denominator)" value={d.denominator} />
+      <Row label="Rounding" value={d.rounding} />
+      <Row label="Instrument" value={d.instrument} mono />
+      {d.note && <p style={noteText}>{d.note}</p>}
+    </div>
+  );
+}
+
+// A titled group of indicator cards.
+function IndicatorSection({ title, subtitle, docs }) {
+  return (
+    <section style={card}>
+      <h3 style={h3}>{title}</h3>
+      <p style={sub}>{subtitle}</p>
+      <div style={{ display: "grid", gap: 16 }}>
+        {docs.map((d) => <IndicatorItem key={d.code + d.title} d={d} />)}
+      </div>
+    </section>
+  );
 }
 
 export default function CalculationDocs() {
   return (
     <div style={{ display: "grid", gap: 28 }}>
       <p style={{ color: "var(--muted)", margin: 0, fontSize: 14, lineHeight: 1.6 }}>
-        How every figure on the dashboard is calculated, mapped back to the OECS
-        Post-Secondary SDG Instrument (table <b>T10 — Teaching Staff Profile</b> and the{" "}
-        <b>SDG Reference</b> sheet). All numbers come straight from the uploaded T10 rows — no
-        data is invented or estimated.
+        How every figure on the dashboards is calculated, mapped back to the OECS
+        Post-Secondary SDG Instrument (the <b>Teaching Staff (T10)</b>, <b>Enrolment (T2)</b>,{" "}
+        <b>Background (1.13–1.18)</b> and <b>Finance (T13)</b> sheets, plus the{" "}
+        <b>SDG Reference</b> sheet). Figures come straight from the uploaded rows — nothing is
+        invented. The two indicators marked <i>reference input</i> also use external population /
+        GDP / ODA figures the instrument does not collect.
       </p>
 
-      {/* ---- SDG indicators ---- */}
-      <section style={card}>
-        <h3 style={h3}>SDG indicators</h3>
-        <p style={sub}>The four headline metrics. Each is a single number derived from all uploaded staff.</p>
-        <div style={{ display: "grid", gap: 16 }}>
-          {indicatorDocs.map((d) => (
-            <div key={d.code} style={item}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                <CodeBadge code={d.code} />
-                <span style={{ fontWeight: 600, fontSize: 15 }}>{d.title}</span>
-                <Formula text={d.formula} />
-                <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--muted)" }}>unit: {d.unit}</span>
-              </div>
-              <Row label="Top (numerator)" value={d.numerator} />
-              <Row label="Bottom (denominator)" value={d.denominator} />
-              <Row label="Rounding" value={d.rounding} />
-              <Row label="Instrument" value={d.instrument} mono />
-              {d.note && <p style={noteText}>{d.note}</p>}
-            </div>
-          ))}
-        </div>
-      </section>
+      {/* ---- Staff (T10) SDG indicators ---- */}
+      <IndicatorSection
+        title="Teaching staff — SDG 4.c family"
+        subtitle="Derived from the uploaded T10 staff rows. The pupil-teacher ratios (4.c.2 / 4.c.4) also divide by the matching institution's enrolment."
+        docs={indicatorDocs}
+      />
+
+      {/* ---- Enrolment (T2) ---- */}
+      <IndicatorSection
+        title="Enrolment — SDG 4.3.3 / 4.5.1 / 4.b.1"
+        subtitle="Aggregate programme counts from the T2 enrolment sheet (no PII)."
+        docs={enrolmentDocs}
+      />
+
+      {/* ---- Background (safety + facilities) ---- */}
+      <IndicatorSection
+        title="Background — SDG 4.a.1 / 4.a.3"
+        subtitle="Institution-level safety & facility answers (items 1.14–1.17), one block per institution."
+        docs={backgroundDocs}
+      />
+
+      {/* ---- Finance (T13) ---- */}
+      <IndicatorSection
+        title="Finance — SDG 4.5.3 / 4.5.4 / 4.c.5"
+        subtitle="Revenue, recurrent expenditure, equity funding and teacher salaries from the T13 Finance sheet."
+        docs={financeDocs}
+      />
+
+      {/* ---- System (territory-level + external reference) ---- */}
+      <IndicatorSection
+        title="System — SDG 4.3.2 / 4.5.6 / 4.5.5 (reference input)"
+        subtitle="Territory-level ratios that need an external denominator (population, GDP, ODA) from lib/referenceData.js — illustrative until replaced with official statistics."
+        docs={systemDocs}
+      />
 
       {/* ---- Distributions ---- */}
       <section style={card}>

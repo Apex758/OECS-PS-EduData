@@ -109,6 +109,7 @@ function Portal({ token, onSignOut }) {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <a href="/admin/access" style={{ ...ghost, textDecoration: "none", color: "#1a1d21", display: "inline-block" }}>Users &amp; access</a>
           <a href="/admin/validation" style={{ ...ghost, textDecoration: "none", color: "#1a1d21", display: "inline-block" }}>Validation rules</a>
+          <a href="/validation" style={{ ...ghost, textDecoration: "none", color: "#1a1d21", display: "inline-block" }}>Validation layer</a>
           <button onClick={load} style={ghost}>Refresh</button>
           <button onClick={onSignOut} style={ghost}>Sign out</button>
         </div>
@@ -116,6 +117,8 @@ function Portal({ token, onSignOut }) {
 
       {error && <Box bg={C.errBg} fg={C.errText}>{error}</Box>}
       {loading && <p style={{ color: C.muted }}>Loading…</p>}
+
+      <RuliKeyCard api={api} />
 
       {data && (
         <>
@@ -371,6 +374,69 @@ function DownloadSection() {
 function Box({ bg, fg, children }) {
   return <div style={{ background: bg, color: fg, border: `1px solid ${bg}`, borderRadius: 8, padding: "10px 14px", margin: "12px 0", fontSize: 14 }}>{children}</div>;
 }
+
+// Per-exe RULI Mapper keys. READ-ONLY: each institution's standalone GENERATES
+// its own unique key and self-registers it via /api/validation/ruli-key. This
+// card lists the registered exes (keys masked).
+function RuliKeyCard({ api }) {
+  const [keys, setKeys] = useState(null);
+  const [err, setErr] = useState(null);
+
+  const load = useCallback(() => {
+    api("/api/admin/ruli-key")
+      .then((r) => setKeys(r.keys || []))
+      .catch((e) => setErr(String(e.message)));
+  }, [api]);
+  useEffect(() => { load(); }, [load]);
+
+  const fmt = (ts) => (ts ? new Date(ts).toLocaleString() : "—");
+
+  return (
+    <section style={card}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 600, margin: "0 0 6px" }}>RULI Mapper keys</h2>
+        <button onClick={load} style={ghost}>Refresh</button>
+      </div>
+      <p style={{ color: C.muted, margin: "0 0 12px", fontSize: 14 }}>
+        Each institution’s standalone generates its own key and registers it with the validation
+        layer. The app authenticates every push against this set. Keys are generated in the exe — not here.
+      </p>
+      {err && <Box bg={C.errBg} fg={C.errText}>{err}</Box>}
+      {keys && keys.length === 0 && !err && (
+        <Box bg={C.codeBg || "var(--code-bg)"} fg={C.muted}>
+          No exes registered yet — open the RULI Mapper exe (Settings → Upload key to validation layer).
+        </Box>
+      )}
+      {keys && keys.length > 0 && (
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+            <thead>
+              <tr>
+                <th style={thCell}>Key</th>
+                <th style={thCell}>Institution</th>
+                <th style={thCell}>Registered</th>
+                <th style={thCell}>Last used</th>
+              </tr>
+            </thead>
+            <tbody>
+              {keys.map((k) => (
+                <tr key={k.id}>
+                  <td style={{ ...tdCell, fontFamily: "monospace" }}>{k.keyHint}</td>
+                  <td style={tdCell}>{k.institution || <span style={{ color: C.muted }}>—</span>}</td>
+                  <td style={{ ...tdCell, color: C.muted, whiteSpace: "nowrap" }}>{fmt(k.created_at)}</td>
+                  <td style={{ ...tdCell, color: C.muted, whiteSpace: "nowrap" }}>{fmt(k.last_used_at)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+const thCell = { textAlign: "left", padding: "6px 10px", color: "var(--muted)", fontWeight: 600, borderBottom: "1px solid var(--border)", whiteSpace: "nowrap" };
+const tdCell = { padding: "8px 10px", borderBottom: "1px solid var(--border)" };
 function Table({ head, children }) {
   return (
     <div style={{ overflowX: "auto", marginTop: 16 }}>

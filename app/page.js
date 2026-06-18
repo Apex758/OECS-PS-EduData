@@ -134,7 +134,7 @@ export default function Home() {
               OECS Post-Secondary EduData
             </h1>
             <p style={{ color: COLORS.muted, margin: "8px 0 0", fontSize: 15 }}>
-              Anonymize teaching-staff records
+              Drop staff & enrolment files together — each is auto-sorted to the right flow
             </p>
           </div>
           {/* View-as switcher (demo) — top-right, always available */}
@@ -142,6 +142,23 @@ export default function Home() {
             <ModeButton active={view === "institution"} onClick={() => setView("institution")}>Institution</ModeButton>
             <ModeButton active={view === "ministry"} onClick={() => setView("ministry")}>Ministry</ModeButton>
             <ModeButton active={view === "admin"} onClick={() => setView("admin")}>Admin</ModeButton>
+            <a
+              href="/validation"
+              style={{
+                border: `1px solid ${COLORS.border}`,
+                background: COLORS.card,
+                color: "var(--text)",
+                borderRadius: 8,
+                padding: "9px 16px",
+                fontSize: 15,
+                fontWeight: 500,
+                cursor: "pointer",
+                textDecoration: "none",
+                display: "inline-block",
+              }}
+            >
+              Validation layer
+            </a>
           </div>
         </header>
 
@@ -172,7 +189,11 @@ export default function Home() {
           )}
         </nav>
 
-        {tab === "upload" && <UploadPanel view={view} />}
+        {/* Kept mounted (hidden via CSS) so the upload queue + results survive
+            tab switches; conditional unmount would drop the in-memory File list. */}
+        <div style={{ display: tab === "upload" ? "block" : "none" }}>
+          <UploadPanel view={view} />
+        </div>
         {tab === "dashboard" && <Dashboard view={view} setView={setView} />}
         {tab === "enrolment" && <EnrolmentDashboard view={view} />}
         {tab === "access" && <AccessDemo />}
@@ -306,12 +327,13 @@ function UploadPanel({ view = "institution" }) {
   // Role demoed is driven by the dashboard view toggle.
   const role = VIEW_ROLE[view] || "teacher";
   const scope = ROLE_SCOPE[role] || "institution";
-  // Entity defaults from role but the user can override it (e.g. upload
-  // student or institution data through the same panel).
-  const [entity, setEntity] = useState(ROLE_ENTITY[role] || "staff");
+  // Record type is auto-detected from the file's columns server-side (no
+  // dropdown). "auto" tells /api/process to identify staff/student/institution.
+  const [entity] = useState("auto");
 
   // Each entry: { id, file, status: 'pending'|'processing'|'done'|'error', result, error }
   const [queue, setQueue] = useState([]);
+  const [preview, setPreview] = useState(null); // entry being previewed in modal
   const [dragOver, setDragOver] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [pasteOpen, setPasteOpen] = useState(false);
@@ -526,7 +548,7 @@ function UploadPanel({ view = "institution" }) {
                 )}
               </div>
               <div style={{ fontSize: 16, fontWeight: 500 }}>Drop CSV / XLSX files here or click to browse</div>
-              <div style={{ fontSize: 14, color: COLORS.muted, marginTop: 4 }}>Multiple files supported — each processed separately and appended</div>
+              <div style={{ fontSize: 14, color: COLORS.muted, marginTop: 4 }}>Mix staff and enrolment workbooks — each is auto-detected and routed to the right flow</div>
               <input
                 ref={inputRef}
                 type="file"
@@ -555,7 +577,20 @@ function UploadPanel({ view = "institution" }) {
                         color={verifiedReady ? COLORS.good : undefined} />;
                     })()}
                   </span>
-                  <span style={{ flex: 1, fontSize: 14, fontWeight: 500 }}>{entry.file.name}</span>
+                  {entry.kind !== "sheet" && entry.file?.size > 0 ? (
+                    <button
+                      onClick={() => setPreview(entry)}
+                      title="Click to preview file contents"
+                      style={{
+                        flex: 1, textAlign: "left", background: "none", border: "none",
+                        padding: 0, cursor: "pointer", fontSize: 14, fontWeight: 500,
+                        color: COLORS.accent, textDecoration: "underline", textDecorationStyle: "dotted",
+                        textUnderlineOffset: 3,
+                      }}
+                    >{entry.file.name}</button>
+                  ) : (
+                    <span style={{ flex: 1, fontSize: 14, fontWeight: 500 }}>{entry.file.name}</span>
+                  )}
                   <span style={{ fontSize: 12, color: COLORS.muted }}>
                     {entry.kind === "sheet" ? "Sheet" : `${(entry.file.size / 1024).toFixed(1)} KB`}
                   </span>
@@ -569,7 +604,10 @@ function UploadPanel({ view = "institution" }) {
                       {entry.error}
                     </span>
                   )}
-                  {(entry.status === "pending" || entry.status === "verifying" || entry.status === "error") && (
+                  {/* Any non-processing entry can be removed individually — incl. done,
+                      so one file can be dropped without clearing and re-uploading the rest.
+                      Its result view is derived from done entries, so it disappears too. */}
+                  {entry.status !== "processing" && (
                     <button
                       onClick={() => removeEntry(entry.id)}
                       style={{ background: "none", border: "none", color: COLORS.muted, cursor: "pointer", fontSize: 16, padding: "0 2px" }}
@@ -583,23 +621,9 @@ function UploadPanel({ view = "institution" }) {
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: COLORS.muted }}>
-              Data type
-              <select
-                value={entity}
-                onChange={(e) => setEntity(e.target.value)}
-                disabled={processing}
-                style={{
-                  background: COLORS.card, color: "var(--text)",
-                  border: `1px solid ${COLORS.border}`, borderRadius: 8,
-                  padding: "6px 10px", fontSize: 13, fontWeight: 600, cursor: "pointer",
-                }}
-              >
-                {UPLOAD_ENTITIES.map((e) => (
-                  <option key={e} value={e}>{e.charAt(0).toUpperCase() + e.slice(1)}</option>
-                ))}
-              </select>
-            </label>
+            <span style={{ fontSize: 13, color: COLORS.muted }}>
+              Record type is detected automatically from the file's columns.
+            </span>
             <button
               onClick={processAll}
               disabled={processing || pendingCount === 0}
@@ -635,9 +659,143 @@ function UploadPanel({ view = "institution" }) {
           <ResultView result={entry.result} scope={scope} />
         </div>
       ))}
+
+      {preview && <FilePreviewModal entry={preview} onClose={() => setPreview(null)} />}
     </div>
   );
 }
+
+// Reads the queued File in-browser with SheetJS and renders each worksheet
+// behind a tab strip — lets the uploader eyeball the raw workbook before
+// processing. CSVs come through as a single sheet.
+function FilePreviewModal({ entry, onClose }) {
+  const [sheets, setSheets] = useState(null); // [{ name, rows: string[][] }]
+  const [active, setActive] = useState(0);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const buf = await entry.file.arrayBuffer();
+        const XLSX = await import("xlsx");
+        const wb = XLSX.read(buf, { type: "array" });
+        const parsed = wb.SheetNames.map((name) => ({
+          name,
+          rows: XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, defval: "", raw: false })
+            .map((r) => (Array.isArray(r) ? r.map((c) => (c == null ? "" : String(c))) : [])),
+        }));
+        if (!cancelled) setSheets(parsed);
+      } catch (e) {
+        if (!cancelled) setError(String(e?.message || e));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [entry]);
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    // Lock background page scroll while the modal is open so wheel/touch
+    // scrolling targets the modal, not the page behind it.
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [onClose]);
+
+  const sheet = sheets?.[active];
+  const maxCols = sheet ? sheet.rows.reduce((m, r) => Math.max(m, r.length), 0) : 0;
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 100,
+        background: "rgba(0,0,0,0.45)",
+        backdropFilter: "blur(5px)", WebkitBackdropFilter: "blur(5px)",
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: COLORS.card, border: `1px solid ${COLORS.border}`,
+          borderRadius: 12, boxShadow: "var(--shadow)",
+          width: "min(1100px, 95vw)", maxHeight: "90vh",
+          display: "flex", flexDirection: "column", overflow: "hidden",
+        }}
+      >
+        {/* header */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", borderBottom: `1px solid ${COLORS.border}` }}>
+          <span style={{ fontSize: 15, fontWeight: 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {entry.file.name}
+          </span>
+          <span style={{ fontSize: 12, color: COLORS.muted }}>
+            {(entry.file.size / 1024).toFixed(1)} KB
+          </span>
+          <button onClick={onClose} aria-label="Close"
+            style={{ background: "none", border: "none", color: COLORS.muted, cursor: "pointer", fontSize: 22, lineHeight: 1, padding: "0 4px" }}>×</button>
+        </div>
+
+        {/* tab strip */}
+        {sheets && sheets.length > 0 && (
+          <div style={{ display: "flex", gap: 2, padding: "8px 12px 0", overflowX: "auto", borderBottom: `1px solid ${COLORS.border}`, flexShrink: 0 }}>
+            {sheets.map((s, i) => (
+              <button
+                key={s.name + i}
+                onClick={() => setActive(i)}
+                style={{
+                  background: i === active ? COLORS.card : COLORS.cardAlt,
+                  border: `1px solid ${COLORS.border}`,
+                  borderBottom: i === active ? `1px solid ${COLORS.card}` : `1px solid ${COLORS.border}`,
+                  borderRadius: "8px 8px 0 0", padding: "7px 14px", marginBottom: -1,
+                  fontSize: 13, fontWeight: i === active ? 600 : 500,
+                  color: i === active ? COLORS.accent : COLORS.muted,
+                  cursor: "pointer", whiteSpace: "nowrap",
+                }}
+              >{s.name}</button>
+            ))}
+          </div>
+        )}
+
+        {/* body */}
+        <div style={{ overflow: "auto", overscrollBehavior: "contain", padding: 0, minHeight: 120, flex: 1 }}>
+          {error && <div style={{ padding: 20, color: COLORS.errText, fontSize: 14 }}>Could not read file: {error}</div>}
+          {!error && !sheets && <div style={{ padding: 20, color: COLORS.muted, fontSize: 14 }}>Reading file…</div>}
+          {!error && sheet && (
+            <table style={{ borderCollapse: "collapse", fontSize: 13, width: "max-content", minWidth: "100%" }}>
+              <tbody>
+                {sheet.rows.length === 0 && (
+                  <tr><td style={{ padding: 16, color: COLORS.muted }}>Empty sheet.</td></tr>
+                )}
+                {sheet.rows.map((row, ri) => (
+                  <tr key={ri} style={ri === 0 ? { background: COLORS.cardAlt } : undefined}>
+                    <td style={{ ...previewCell, color: COLORS.muted, textAlign: "right", position: "sticky", left: 0, background: COLORS.cardAlt, userSelect: "none" }}>{ri + 1}</td>
+                    {Array.from({ length: maxCols }).map((_, ci) => (
+                      <td key={ci} style={{ ...previewCell, fontWeight: ri === 0 ? 600 : 400 }}>{row[ci] ?? ""}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const previewCell = {
+  border: "1px solid var(--border)",
+  padding: "4px 8px",
+  whiteSpace: "nowrap",
+  maxWidth: 320,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+};
 
 function ResultView({ result, scope }) {
   return (
@@ -655,6 +813,12 @@ function ResultView({ result, scope }) {
           <RejectedTable columns={rejectedColumns(result.rejected)} rejected={result.rejected} />
         </Card>
       )}
+
+      {(result.suggestedAliases || []).length > 0 && (
+        <Card style={{ minWidth: 0 }}>
+          <SuggestionsSection result={result} scope={scope} standalone />
+        </Card>
+      )}
     </div>
   );
 }
@@ -662,7 +826,7 @@ function ResultView({ result, scope }) {
 // Unrecognized enum values that the uploader can map themselves and submit
 // for admin review. No admin token needed here — the admin approves later in
 // /admin, which promotes the mapping to a permanent global rule.
-function SuggestionsSection({ result, scope }) {
+function SuggestionsSection({ result, scope, standalone = false }) {
   const initial = result.suggestedAliases || [];
   const alreadyPending = new Set(result.alreadyPending || []);
 
@@ -710,8 +874,8 @@ function SuggestionsSection({ result, scope }) {
   }
 
   return (
-    <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${COLORS.border}` }}>
-      <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
+    <div style={standalone ? {} : { marginTop: 16, paddingTop: 16, borderTop: `1px solid ${COLORS.border}` }}>
+      <div style={standalone ? cardTitle : { fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
         Needs your input — map these to fix the red rows ({initial.length})
       </div>
       <p style={{ color: COLORS.muted, margin: "0 0 12px", fontSize: 13 }}>
@@ -783,7 +947,6 @@ function NormalizationCard({ result, scope }) {
   const dates = result.dateNormalizationApplied || [];
   const warnings = result.headerWarnings || [];
   const hasNorm = headers.length || values.length || dates.length || warnings.length;
-  const hasSuggestions = (result.suggestedAliases || []).length > 0;
 
   const stats = (
     <div style={{ display: "flex", gap: 24, flexWrap: "wrap", flexShrink: 0 }}>
@@ -793,8 +956,9 @@ function NormalizationCard({ result, scope }) {
     </div>
   );
 
-  // Nothing to normalize and nothing to map -> stats-only card.
-  if (!hasNorm && !hasSuggestions) {
+  // Nothing to normalize -> stats-only card. (The map-to-fix verification UI
+  // now renders as its own card under the rejected rows, per school.)
+  if (!hasNorm) {
     return (
       <Card>
         <div style={{ display: "flex", justifyContent: "flex-end" }}>{stats}</div>
@@ -860,7 +1024,6 @@ function NormalizationCard({ result, scope }) {
           </div>
         </div>
       )}
-      <SuggestionsSection result={result} scope={scope} />
         </div>
         <div style={{ order: 2 }}>{stats}</div>
       </div>
@@ -1436,7 +1599,11 @@ function MiniBars({ items }) {
 
 // One SDG indicator as a labelled value + explanatory note.
 function SdgDetailCard({ ind }) {
-  const shown = ind.value == null ? "—" : (ind.unit === "%" ? `${ind.value}%` : ind.value);
+  const shown = ind.value == null
+    ? "—"
+    : ind.unit === "%" ? `${ind.value}%`
+    : ind.unit === "ratio" ? ind.value
+    : `${ind.value} ${ind.unit}`;
   return (
     <div style={{ border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: 14, display: "grid", gap: 4 }}>
       <SdgChip code={ind.code} colour={ind.colour} />
@@ -2068,7 +2235,7 @@ function RejectedTable({ columns, rejected }) {
                         ...tdStyle,
                         whiteSpace: "nowrap",
                         background: bad ? COLORS.errBg : "transparent",
-                        color: bad ? COLORS.errText : "#d6dae0",
+                        color: bad ? COLORS.errText : COLORS.text,
                         fontWeight: bad ? 600 : 400,
                         boxShadow: bad ? `inset 0 0 0 1px ${COLORS.errBorder}` : "none",
                       }}
@@ -2080,7 +2247,7 @@ function RejectedTable({ columns, rejected }) {
                 <td style={tdStyle}>
                   <ul style={{ margin: 0, paddingLeft: 18, display: "grid", gap: 6 }}>
                     {errs.map((e, j) => (
-                      <li key={j} style={{ color: "#d6dae0", fontSize: 14 }}>
+                      <li key={j} style={{ color: COLORS.text, fontSize: 14 }}>
                         {e.label && (
                           <span style={{ color: COLORS.errText, fontWeight: 600 }}>{e.label}: </span>
                         )}
@@ -2755,6 +2922,213 @@ function Stat({ label, value }) {
   );
 }
 
+// Background section: institution-level safety + facilities facts (items
+// 1.13–1.18) -> SDG 4.a.1 (facilities) / 4.a.3 (safety). Recomputes the
+// headline shares from the scoped institution fact rows so it respects the
+// View-as selection. Renders nothing when no institution reported facts.
+const BG_PINK = "#ec4899";
+const BG_RED = "#ef4444";
+function BackgroundPanel({ institutions }) {
+  const insts = institutions || [];
+  const n = insts.length;
+  if (!n) return null;
+  const yes = (f) => insts.filter((i) => i[f] === "Y").length;
+  const pct = (c) => Math.round((c / n) * 1000) / 10;
+  const drills = insts.reduce((s, i) => s + (Number(i.emergencyDrills) || 0), 0);
+  const cards = [
+    { code: "4.a.1", colour: BG_PINK, title: "Disability-accessible", value: `${pct(yes("disabilityAccess"))}%`, detail: `${yes("disabilityAccess")} of ${n}` },
+    { code: "4.a.1", colour: BG_PINK, title: "OECS NREN", value: `${pct(yes("nrenMember"))}%`, detail: `${yes("nrenMember")} of ${n}` },
+    { code: "4.a.3", colour: BG_RED, title: "Disaster plan", value: `${pct(yes("disasterPlan"))}%`, detail: `${yes("disasterPlan")} of ${n}` },
+    { code: "4.a.3", colour: BG_RED, title: "Emergency drills", value: drills, detail: `across ${n} inst.` },
+  ];
+  const yn = (v) => (v === "Y" ? "Yes" : v === "N" ? "No" : "—");
+  return (
+    <Card style={{ minWidth: 0, overflowX: "auto" }}>
+      <h3 style={cardTitle}>Safety &amp; facilities — SDG 4.a.1 / 4.a.3</h3>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, marginBottom: 16 }}>
+        {cards.map((c) => (
+          <div key={c.title} style={{ border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: 12, display: "grid", gap: 4 }}>
+            <SdgChip code={c.code} colour={c.colour} />
+            <div style={{ fontSize: 26, fontWeight: 700, color: c.colour }}>{c.value}</div>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{c.title}</div>
+            <div style={{ fontSize: 12, color: COLORS.muted }}>{c.detail}</div>
+          </div>
+        ))}
+      </div>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        <thead>
+          <tr style={{ textAlign: "left", color: COLORS.muted }}>
+            <th style={enrolTh}>Institution</th>
+            <th style={enrolTh}>Disaster plan</th>
+            <th style={enrolThNum}>Drills</th>
+            <th style={enrolTh}>Disability access</th>
+            <th style={enrolTh}>NREN</th>
+            <th style={enrolThNum}>Research staff (M/F)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {insts.map((i) => (
+            <tr key={i.institution} style={{ borderTop: `1px solid ${COLORS.border}` }}>
+              <td style={enrolTd}>{i.institution}</td>
+              <td style={enrolTd}>{yn(i.disasterPlan)}</td>
+              <td style={enrolTdNum}>{i.emergencyDrills ?? "—"}</td>
+              <td style={enrolTd}>{yn(i.disabilityAccess)}</td>
+              <td style={enrolTd}>{yn(i.nrenMember)}</td>
+              <td style={enrolTdNum}>{(i.researchStaffM ?? "—")} / {(i.researchStaffF ?? "—")}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Card>
+  );
+}
+
+// Finance section: institution-level revenue/expenditure/equity/salary (T13)
+// -> SDG 4.5.3 (equity), 4.5.4 (expenditure per student), 4.c.5 (salary ratio).
+// Recomputes scoped headline figures from the fact rows. Renders nothing when
+// no institution reported finance.
+const FIN_PURPLE = "#8b5cf6";
+const FIN_BLUE = "#0ea5e9";
+const FIN_GREEN = "#3fb950";
+function FinancePanel({ institutions }) {
+  const insts = institutions || [];
+  const n = insts.length;
+  if (!n) return null;
+  const numv = (v) => (Number.isFinite(Number(v)) ? Number(v) : 0);
+  const withEquity = insts.filter((i) => i.equityMechanism === "Y").length;
+  const totalExp = insts.reduce((s, i) => s + numv(i.totalExpenditure), 0);
+  const totalEnrolled = insts.reduce((s, i) => s + numv(i.enrolled), 0);
+  const perStudent = totalEnrolled > 0 ? Math.round(totalExp / totalEnrolled) : null;
+  const ratios = insts
+    .map((i) => (numv(i.comparatorSalary) > 0 ? numv(i.avgTeacherSalary) / numv(i.comparatorSalary) : (Number(i.salaryRatio) || null)))
+    .filter((v) => Number.isFinite(v) && v > 0);
+  const avgRatio = ratios.length ? Math.round((ratios.reduce((a, b) => a + b, 0) / ratios.length) * 100) / 100 : null;
+  const money = (v) => (v == null ? "—" : Number(v).toLocaleString());
+  const cards = [
+    { code: "4.5.3", colour: FIN_PURPLE, title: "Equity funding mechanism", value: `${Math.round((withEquity / n) * 1000) / 10}%`, detail: `${withEquity} of ${n} institutions` },
+    { code: "4.5.4", colour: FIN_BLUE, title: "Expenditure per student", value: money(perStudent), detail: "recurrent exp. ÷ enrolled" },
+    { code: "4.c.5", colour: FIN_GREEN, title: "Teacher salary ratio", value: avgRatio == null ? "—" : avgRatio, detail: ratios.length ? `avg of ${ratios.length}` : "no salary data" },
+  ];
+  return (
+    <Card style={{ minWidth: 0, overflowX: "auto" }}>
+      <h3 style={cardTitle}>Finance — SDG 4.5.3 / 4.5.4 / 4.c.5</h3>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 16 }}>
+        {cards.map((c) => (
+          <div key={c.title} style={{ border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: 12, display: "grid", gap: 4 }}>
+            <SdgChip code={c.code} colour={c.colour} />
+            <div style={{ fontSize: 26, fontWeight: 700, color: c.colour }}>{c.value}</div>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{c.title}</div>
+            <div style={{ fontSize: 12, color: COLORS.muted }}>{c.detail}</div>
+          </div>
+        ))}
+      </div>
+      <p style={{ fontSize: 12, color: COLORS.muted, margin: "0 0 12px" }}>
+        SDG 4.5.6 (% of GDP) and 4.5.5 (ODA share) need external GDP / national-ODA inputs the instrument doesn’t collect — only the local expenditure side is shown.
+      </p>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        <thead>
+          <tr style={{ textAlign: "left", color: COLORS.muted }}>
+            <th style={enrolTh}>Institution</th>
+            <th style={enrolThNum}>Expenditure</th>
+            <th style={enrolThNum}>Enrolled</th>
+            <th style={enrolTh}>Equity</th>
+            <th style={enrolThNum}>Teacher salary</th>
+            <th style={enrolThNum}>Ratio</th>
+          </tr>
+        </thead>
+        <tbody>
+          {insts.map((i) => (
+            <tr key={i.institution} style={{ borderTop: `1px solid ${COLORS.border}` }}>
+              <td style={enrolTd}>{i.institution}</td>
+              <td style={enrolTdNum}>{money(i.totalExpenditure)}</td>
+              <td style={enrolTdNum}>{i.enrolled ?? "—"}</td>
+              <td style={enrolTd}>{i.equityMechanism === "Y" ? "Yes" : i.equityMechanism === "N" ? "No" : "—"}</td>
+              <td style={enrolTdNum}>{money(i.avgTeacherSalary)}</td>
+              <td style={enrolTdNum}>{i.comparatorSalary > 0 ? (Math.round((i.avgTeacherSalary / i.comparatorSalary) * 100) / 100) : (i.salaryRatio ?? "—")}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Card>
+  );
+}
+
+// System section: territory-level GER (4.3.2) + expenditure % GDP (4.5.6).
+// Both need an external denominator (population / GDP) from referenceData, so
+// values are flagged illustrative. Recomputes OECS aggregates from the scoped
+// territory rows. Renders nothing when no territory has reference data.
+const SYS_BLUE = "#4f8cf7";
+const SYS_ORANGE = "#f97316";
+const SYS_TEAL = "#14b8a6";
+function SystemPanel({ territories }) {
+  const terrs = territories || [];
+  if (!terrs.length) return null;
+  const withPop = terrs.filter((t) => t.population != null);
+  const withGdp = terrs.filter((t) => t.gdp != null);
+  const withOda = terrs.filter((t) => t.odaTotal != null);
+  const enrol = withPop.reduce((s, t) => s + (t.enrolment || 0), 0);
+  const pop = withPop.reduce((s, t) => s + (t.population || 0), 0);
+  const exp = withGdp.reduce((s, t) => s + (t.expenditure || 0), 0);
+  const gdp = withGdp.reduce((s, t) => s + (t.gdp || 0), 0);
+  const odaEdu = withOda.reduce((s, t) => s + (t.odaToEducation || 0), 0);
+  const odaTot = withOda.reduce((s, t) => s + (t.odaTotal || 0), 0);
+  const pct = (a, b) => (b > 0 ? Math.round((a / b) * 1000) / 10 : null);
+  const ger = pct(enrol, pop);
+  const pgdp = pct(exp, gdp);
+  const odaShare = pct(odaEdu, odaTot);
+  const cards = [
+    { code: "4.3.2", colour: SYS_BLUE, title: "Tertiary GER", value: ger == null ? "—" : `${ger}%`, detail: pop ? `${enrol.toLocaleString()} / ${pop.toLocaleString()} cohort` : "no population reference" },
+    { code: "4.5.6", colour: SYS_ORANGE, title: "Expenditure % of GDP", value: pgdp == null ? "—" : `${pgdp}%`, detail: gdp ? `${exp.toLocaleString()} / ${gdp.toLocaleString()} GDP` : "no GDP reference" },
+    { code: "4.5.5", colour: SYS_TEAL, title: "ODA to education share", value: odaShare == null ? "—" : `${odaShare}%`, detail: odaTot ? `${odaEdu.toLocaleString()} / ${odaTot.toLocaleString()} ODA` : "no ODA reference" },
+  ];
+  return (
+    <Card style={{ minWidth: 0, overflowX: "auto" }}>
+      <h3 style={cardTitle}>System indicators — SDG 4.3.2 / 4.5.6 / 4.5.5</h3>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 16 }}>
+        {cards.map((c) => (
+          <div key={c.code} style={{ border: `1px solid ${COLORS.border}`, borderRadius: 10, padding: 12, display: "grid", gap: 4 }}>
+            <SdgChip code={c.code} colour={c.colour} />
+            <div style={{ fontSize: 26, fontWeight: 700, color: c.colour }}>{c.value}</div>
+            <div style={{ fontSize: 13, fontWeight: 600 }}>{c.title}</div>
+            <div style={{ fontSize: 12, color: COLORS.muted }}>{c.detail}</div>
+          </div>
+        ))}
+      </div>
+      <p style={{ fontSize: 12, color: COLORS.muted, margin: "0 0 12px" }}>
+        Population, GDP &amp; ODA receipts are <b>illustrative reference inputs</b> (lib/referenceData.js), not collected by the instrument — replace with official national / OECD-DAC statistics for real reporting.
+      </p>
+      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        <thead>
+          <tr style={{ textAlign: "left", color: COLORS.muted }}>
+            <th style={enrolTh}>Territory</th>
+            <th style={enrolThNum}>Enrolment</th>
+            <th style={enrolThNum}>Cohort</th>
+            <th style={enrolThNum}>GER</th>
+            <th style={enrolThNum}>Expenditure</th>
+            <th style={enrolThNum}>GDP</th>
+            <th style={enrolThNum}>% GDP</th>
+            <th style={enrolThNum}>ODA share</th>
+          </tr>
+        </thead>
+        <tbody>
+          {terrs.map((t) => (
+            <tr key={t.territory} style={{ borderTop: `1px solid ${COLORS.border}` }}>
+              <td style={enrolTd}>{t.territory}</td>
+              <td style={enrolTdNum}>{t.enrolment.toLocaleString()}</td>
+              <td style={enrolTdNum}>{t.population == null ? "—" : t.population.toLocaleString()}</td>
+              <td style={enrolTdNum}>{t.ger == null ? "—" : `${t.ger}%`}</td>
+              <td style={enrolTdNum}>{t.expenditure ? t.expenditure.toLocaleString() : "—"}</td>
+              <td style={enrolTdNum}>{t.gdp == null ? "—" : t.gdp.toLocaleString()}</td>
+              <td style={enrolTdNum}>{t.pctGdp == null ? "—" : `${t.pctGdp}%`}</td>
+              <td style={enrolTdNum}>{t.odaShare == null ? "—" : `${t.odaShare}%`}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Card>
+  );
+}
+
 // =====================================================================
 // ENROLMENT DASHBOARD  --  instrument T2 (no PII; aggregate counts).
 // Reads /api/sdg-enrolment and renders the SDG 4.3.3 / 4.5.1 / 4.b.1
@@ -2845,6 +3219,22 @@ function EnrolmentDashboard({ view = "institution" }) {
   const scopeLabel = selKey === "__all__" ? "OECS-wide" : selKey;
   const scopeYear = scopeRows[0]?.academicYear || scopeRejected[0]?.academicYear || "";
 
+  // Background (4.a.1/4.a.3) + Finance (4.5.3/4.5.4/4.c.5), scoped like the rest.
+  const scopeFacts = (list) => selKey === "__all__" ? list
+    : view === "ministry" ? list.filter((i) => i.territory === selKey)
+    : list.filter((i) => i.institution === selKey);
+  const bgScoped = scopeFacts(data.background?.institutions || []);
+  const finScoped = scopeFacts(data.finance?.institutions || []);
+
+  // System indicators (4.3.2 GER / 4.5.6 %GDP) are territory-level. Resolve the
+  // scope to a territory: ministry view picks it directly, institution view via
+  // its territory, OECS-wide shows every territory.
+  const scopeTerritory = selKey === "__all__" ? null
+    : view === "ministry" ? selKey
+    : (instTerr[selKey] || null);
+  const sysAll = data.system?.territories || [];
+  const sysScoped = scopeTerritory ? sysAll.filter((t) => t.territory === scopeTerritory) : sysAll;
+
   return (
     <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr)", gap: 20 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: 12 }}>
@@ -2881,7 +3271,7 @@ function EnrolmentDashboard({ view = "institution" }) {
       <>
       {/* Headline totals */}
       <Card>
-        <div style={{ display: "flex", gap: 32, flexWrap: "wrap" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 24 }}>
           <Stat label="Programmes" value={agg.count} />
           <Stat label="Total enrolled" value={t.total} />
           <Stat label="Male" value={t.male} />
@@ -2909,6 +3299,15 @@ function EnrolmentDashboard({ view = "institution" }) {
           </Card>
         ))}
       </div>
+
+      {/* Background: safety + facilities (SDG 4.a.1 / 4.a.3) */}
+      <BackgroundPanel institutions={bgScoped} />
+
+      {/* Finance: equity + expenditure + salary (SDG 4.5.3 / 4.5.4 / 4.c.5) */}
+      <FinancePanel institutions={finScoped} />
+
+      {/* System: GER + expenditure % GDP (SDG 4.3.2 / 4.5.6), territory-level */}
+      <SystemPanel territories={sysScoped} />
 
       {/* By division */}
       <Card>

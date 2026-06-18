@@ -192,7 +192,7 @@ function UserRow({ u, data, api, reload }) {
         </select>
       </td>
       <td style={td}><input style={{ ...cell, minWidth: 110 }} value={d.schools}
-        onChange={(e) => setD({ ...d, schools: e.target.value })} placeholder={d.role === "teacher" ? "JM-S1" : ""} /></td>
+        onChange={(e) => setD({ ...d, schools: e.target.value })} placeholder={d.role === "teacher" ? "LC-CC" : ""} /></td>
       <td style={td}>
         {d.role === "minister"
           ? <input type="checkbox" checked={d.can_drill_students}
@@ -238,7 +238,7 @@ function NewUserRow({ data, api, reload }) {
           {data.countries.map((c) => <option key={c.iso_code} value={c.iso_code}>{c.iso_code}</option>)}
         </select>
       </td>
-      <td style={td}><input style={{ ...cell, minWidth: 110 }} value={d.schools} placeholder="JM-S1" onChange={(e) => setD({ ...d, schools: e.target.value })} /></td>
+      <td style={td}><input style={{ ...cell, minWidth: 110 }} value={d.schools} placeholder="LC-CC" onChange={(e) => setD({ ...d, schools: e.target.value })} /></td>
       <td style={td}>{d.role === "minister"
         ? <input type="checkbox" checked={d.can_drill_students} onChange={(e) => setD({ ...d, can_drill_students: e.target.checked })} />
         : <span style={{ color: C.muted }}>—</span>}</td>

@@ -1,17 +1,10 @@
 school_code,country_iso,school_name,level
-JM-S1,JM,Kingston Primary School,primary
-JM-S2,JM,Montego Bay High School,secondary
-JM-S3,JM,Spanish Town Community College,tertiary
-LC-S1,LC,Castries Primary School,primary
-LC-S2,LC,Vieux Fort Secondary School,secondary
-LC-S3,LC,Gros Islet Community College,tertiary
-JM-T1,JM,Kingston Community College,tertiary
-JM-T2,JM,Montego Bay Teachers College,tertiary
-JM-T3,JM,Northern Caribbean University,tertiary
-LC-T1,LC,Sir Arthur Lewis Community College,tertiary
-LC-T2,LC,Monroe College LC,tertiary
-BB-T1,BB,Samuel Jackman Prescod Polytechnic,tertiary
-BB-T2,BB,Community College of Barbados,tertiary
-TT-T1,TT,COSTAATT,tertiary
-TT-T2,TT,UTT San Fernando,tertiary
-GD-T1,GD,T.A. Marryshow Community College,tertiary
+AG-CC,AG,Antigua State College,tertiary
+AI-CC,AI,Anguilla Community College,tertiary
+VG-CC,VG,H. Lavity Stoutt Community College,tertiary
+DM-CC,DM,Dominica State College,tertiary
+GD-CC,GD,T.A. Marryshow Community College,tertiary
+MS-CC,MS,Montserrat Community College,tertiary
+KN-CC,KN,Clarence Fitzroy Bryant College,tertiary
+LC-CC,LC,Sir Arthur Lewis Community College,tertiary
+VC-CC,VC,St. Vincent and the Grenadines Community College,tertiary

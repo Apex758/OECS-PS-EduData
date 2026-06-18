@@ -17,7 +17,7 @@ create table if not exists school_api_keys (
   id           serial primary key,
   school_id    int  not null references schools(id) on delete cascade,
   key_hash     text not null unique,          -- sha256(raw key), hex
-  label        text,                          -- e.g. "Kingston Primary - office PC"
+  label        text,                          -- e.g. "Sir Arthur Lewis CC - office PC"
   revoked      boolean not null default false,
   created_at   timestamptz not null default now(),
   last_used_at timestamptz

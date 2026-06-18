@@ -1,0 +1,12 @@
+institution,territory,surname,first_name,gender,classification,highest_qualification,years_experience,cpd_hours,left_service,appraised,date_of_birth,nationality,teacher_type,subjects,area_of_specialisation,total_periods
+Dominica State College,Dominica,Browne,Sophia,F,PR,PhD,18,45,N,Y,1972-04-01,Dominican,Full Time,Educational Leadership,Educational Leadership,12
+Dominica State College,Dominica,Williams,David,M,VP,Masters,14,32,N,Y,1976-05-04,Dominican,Full Time,Mathematics,STEM,18
+Dominica State College,Dominica,Joseph,Angela,F,HOD,Masters,11,25,N,Y,1979-06-07,Dominican,Full Time,Nursing,Health Sciences,24
+Dominica State College,Dominica,Charles,Marcus,Male,HOD,Bachelors,9,18,N,Y,1981-07-10,Dominican,Full Time,Computer Science,Information Technology,28
+Dominica State College,Dominica,Thomas,Karen,F,TT,Bachelors,6,12,N,Y,1984-08-13,Dominican,Full Time,English Language,Humanities & Education,30
+Dominica State College,Dominica,Lewis,Ricardo,M,TT,PostGradDiploma,4,8,N,N,1986-09-16,Dominican,Full Time,Civil Engineering,Engineering & Technology,26
+Dominica State College,Dominica,Francis,Donna,Female,TT,Bachelors,7,0,N,Y,1983-10-19,Dominican,Full Time,Hospitality Management,Hospitality & Tourism,28
+Dominica State College,Dominica,Campbell,Wayne,M,TT,Diploma,3,0,Y,N,1987-11-22,Dominican,Part Time,Culinary Arts,Hospitality & Tourism,16
+Dominica State College,Dominica,Richards,Maxine,F,TT,PostGradDiploma,5,20,N,Y,1985-12-25,Dominican,Full Time,Accounting,Business & Management,30
+Dominica State College,Dominica,Robinson,Gerald,male,TT,Masters,22,40,N,Y,1968-01-01,Dominican,Full Time,Business Administration,Business & Management,28
+Dominica State College,Dominica,Edwards,Patricia,F,TT,Bachelors,1,5,N,N,1989-02-04,Dominican,Full Time,Medical Laboratory Technology,Health Sciences,24

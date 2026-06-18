@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/userAdminGate";
+import { isAdminOrRuliKey } from "@/lib/ruliKeyAuth";
 import { listValueAliases, addValueAlias, removeValueAlias } from "@/lib/db";
 
 // Admin-approved enum value normalizations (the "add this value to the rules?"
-// flow). Reads are open to the admin UI; writes/deletes gated by isAdmin.
+// flow). Reads are open to admin OR the RULI Mapper key (the standalone syncs
+// them); writes/deletes gated by isAdmin.
 export const runtime = "nodejs";
-const deny = () => NextResponse.json({ error: "admin only" }, { status: 403 });
+const deny = () => NextResponse.json({ error: "not authorized" }, { status: 403 });
 
 export async function GET(req) {
-  if (!(await isAdmin(req))) return deny();
+  if (!(await isAdminOrRuliKey(req))) return deny();
   const entity = new URL(req.url).searchParams.get("entity") || undefined;
   try {
     return NextResponse.json({ aliases: await listValueAliases(entity) });
