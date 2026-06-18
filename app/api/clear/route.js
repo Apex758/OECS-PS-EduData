@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
-import { clearValueAliases, clearPendingAliases, clearStaff, clearEnrolment } from "@/lib/db";
+import { clearValueAliases, clearPendingAliases, clearStaff, clearEnrolment, clearValidation } from "@/lib/db";
 
 const OUT_DIR = path.join(process.cwd(), "data", "output");
 const ENTITIES = ["student", "staff", "institution"];
@@ -49,9 +49,11 @@ export async function POST() {
   let dbError = null;
   let aliasSnapshot = [];
   let pendingSnapshot = [];
+  let validationCleared = 0;
   try {
     await clearStaff();
     await clearEnrolment();
+    validationCleared = (await clearValidation()).tokensCleared;
     [aliasSnapshot, pendingSnapshot] = await Promise.all([
       clearValueAliases(),
       clearPendingAliases(),
@@ -93,5 +95,5 @@ export async function POST() {
     );
   }
 
-  return NextResponse.json({ ok: !dbError, removed, aliasesCleared, pendingCleared, dbError });
+  return NextResponse.json({ ok: !dbError, removed, aliasesCleared, pendingCleared, validationCleared, dbError });
 }

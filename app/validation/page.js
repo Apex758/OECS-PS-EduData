@@ -89,7 +89,7 @@ export default function ValidationLayerPage() {
 
       <section style={card}>
         <div style={{ display: "flex", gap: 24, flexWrap: "wrap", color: C.muted }}>
-          <span>Registered exes: <strong style={{ color: C.text }}>{data?.registeredExes ?? 0}</strong></span>
+          <span>Registered Institutions: <strong style={{ color: C.text }}>{data?.registeredExes ?? 0}</strong></span>
           <span>Duplicate candidates: <strong style={{ color: C.text }}>{dups.length}</strong></span>
           <span>Awaiting institution approval: <strong style={{ color: C.text }}>{pending.length}</strong></span>
           <span>Resolved: <strong style={{ color: C.text }}>{resolved.length}</strong></span>

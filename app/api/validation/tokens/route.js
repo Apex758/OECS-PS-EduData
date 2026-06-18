@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdminOrRuliKey } from "@/lib/ruliKeyAuth";
-import { valInsertTokens, valScan, valLogEvent } from "@/lib/db";
+import { valInsertTokens, valScan, valLogEvent, valDeleteTokens } from "@/lib/db";
 
 // Standalone pushes complete tokens here; we store them and immediately scan
 // for cross-institution salt collisions so the push response can report how
@@ -21,6 +21,22 @@ export async function POST(req) {
       detail: { inserted: ins.inserted, institutions: ins.institutions, duplicatesFound: scan.duplicatesFound },
     });
     return NextResponse.json({ ok: true, inserted: ins.inserted, duplicatesFound: scan.duplicatesFound });
+  } catch (e) {
+    return NextResponse.json({ error: e.message }, { status: 500 });
+  }
+}
+
+// Cascade delete: an exe removed a saved mapping run locally and sends that
+// run's tokens here so the layer drops them too. Stale dup candidates whose
+// collision no longer holds are cleaned up inside valDeleteTokens.
+export async function DELETE(req) {
+  if (!(await isAdminOrRuliKey(req))) return deny();
+  try {
+    const { tokens } = await req.json();
+    if (!Array.isArray(tokens)) return NextResponse.json({ error: "tokens[] required" }, { status: 400 });
+    const out = await valDeleteTokens(tokens);
+    await valLogEvent({ kind: "delete", detail: out });
+    return NextResponse.json({ ok: true, ...out });
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: 500 });
   }
