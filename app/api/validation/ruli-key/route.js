@@ -3,11 +3,22 @@ import { registerRuliKey, deleteRuliKey, valLogEvent } from "@/lib/db";
 import { isAdmin } from "@/lib/userAdminGate";
 
 // Each RULI Mapper standalone GENERATES its own unique key (rmk_<hex>) and
-// self-registers it here. Open registration (demo): any exe may register its own
-// key. Afterwards that key authenticates the exe's pushes. Many exes → many keys.
+// self-registers it here. Registration is gated by RULI_REGISTER_SECRET: the
+// exe must send it as "Bearer <secret>". If the env var is UNSET, registration
+// stays open (demo default). Afterwards the key authenticates the exe's pushes.
 export const runtime = "nodejs";
 
+function registerAllowed(req) {
+  const secret = process.env.RULI_REGISTER_SECRET;
+  if (!secret) return true; // open registration when no secret configured
+  const auth = req.headers.get("authorization") || "";
+  return auth === `Bearer ${secret}`;
+}
+
 export async function POST(req) {
+  if (!registerAllowed(req)) {
+    return NextResponse.json({ error: "registration closed — valid Bearer secret required" }, { status: 403 });
+  }
   try {
     const { key, institution } = await req.json();
     if (!key || !/^rmk_[0-9a-f]{16,}$/i.test(key)) {
