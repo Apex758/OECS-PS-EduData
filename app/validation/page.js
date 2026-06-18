@@ -28,6 +28,16 @@ export default function ValidationLayerPage() {
     if (t) { setToken(t); setAuthed(true); }
   }, []);
 
+  const clearKeys = useCallback(async () => {
+    if (!confirm("Unregister all RULI Mapper keys? Resets the registered-institution count to 0.")) return;
+    try {
+      const res = await fetch("/api/validation/ruli-key", { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || `HTTP ${res.status}`);
+      setError(null);
+    } catch (e) { setError(String(e.message)); }
+  }, [token]);
+
   const load = useCallback(async () => {
     if (!token) return;
     try {
@@ -89,7 +99,12 @@ export default function ValidationLayerPage() {
 
       <section style={card}>
         <div style={{ display: "flex", gap: 24, flexWrap: "wrap", color: C.muted }}>
-          <span>Registered Institutions: <strong style={{ color: C.text }}>{data?.registeredExes ?? 0}</strong></span>
+          <span>
+            Registered Institutions: <strong style={{ color: C.text }}>{data?.registeredExes ?? 0}</strong>
+            {(data?.registeredExes ?? 0) > 0 && (
+              <button onClick={clearKeys} style={{ ...ghost, padding: "2px 8px", fontSize: 11, marginLeft: 8 }}>clear</button>
+            )}
+          </span>
           <span>Duplicate candidates: <strong style={{ color: C.text }}>{dups.length}</strong></span>
           <span>Awaiting institution approval: <strong style={{ color: C.text }}>{pending.length}</strong></span>
           <span>Resolved: <strong style={{ color: C.text }}>{resolved.length}</strong></span>
