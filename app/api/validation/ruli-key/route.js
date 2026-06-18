@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { registerRuliKey, deleteRuliKey, valLogEvent } from "@/lib/db";
+import { registerRuliKey, deleteRuliKey, valDeleteEvents, valLogEvent } from "@/lib/db";
 import { isAdmin } from "@/lib/userAdminGate";
 
 // Each RULI Mapper standalone GENERATES its own unique key (rmk_<hex>) and
@@ -38,7 +38,10 @@ export async function DELETE(req) {
   try {
     const { id } = await req.json().catch(() => ({}));
     const r = await deleteRuliKey({ id: id || null });
-    await valLogEvent({ kind: "ruli_key_delete", detail: { deleted: r.deleted } });
+    // Wipe-all (no id) is a demo reset: also purge the key register/delete
+    // entries so no orphan activity is left behind. No new event logged.
+    if (!id) await valDeleteEvents({ kinds: ["ruli_key_register", "ruli_key_delete"] });
+    else await valLogEvent({ kind: "ruli_key_delete", detail: { deleted: r.deleted } });
     return NextResponse.json(r);
   } catch (e) {
     return NextResponse.json({ error: e.message }, { status: 500 });
