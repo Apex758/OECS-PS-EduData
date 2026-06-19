@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { registerRuliKey, deleteRuliKey, valDeleteEvents, valLogEvent } from "@/lib/db";
+import { isDbConfigured, pushRequiresDbResponse } from "@/lib/dbConfig";
 import { isAdmin } from "@/lib/userAdminGate";
 
 // Each RULI Mapper standalone GENERATES its own unique key (rmk_<hex>) and
@@ -16,6 +17,7 @@ function registerAllowed(req) {
 }
 
 export async function POST(req) {
+  if (!isDbConfigured()) return pushRequiresDbResponse();
   if (!registerAllowed(req)) {
     return NextResponse.json({ error: "registration closed — valid Bearer secret required" }, { status: 403 });
   }

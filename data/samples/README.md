@@ -1,4 +1,21 @@
-# Sample student CSVs — different formats, same canonical schema
+# Sample uploads — different formats, same pipeline
+
+## Combined registry workbook (`combined_registry_table.xlsx`)
+
+Multi-sheet OECS registry format:
+
+| Sheet | Purpose |
+|-------|---------|
+| **Cover** | Institution name (required before upload) |
+| **Background** | Academic year / reporting period |
+| **Teachers** | Staff rows (`Teacher_*` columns) → strip & validate → push to approval layer |
+| **Students** | Student rows (`Student_*` columns) — auto-detected when Teachers sheet absent |
+
+Parsed by `lib/registryWorkbook.js`. Prefixed headers (`Teacher_First Name`, `Teacher_RUTI`, …) map to the same canonical staff fields as flat CSVs via `lib/headerAliases.js`.
+
+---
+
+## Flat student CSV samples
 
 Five files from five fictional schools. Each names its columns and writes its
 values **differently**, yet all five flow through the ingest pipeline and land

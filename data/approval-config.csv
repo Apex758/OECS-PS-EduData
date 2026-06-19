@@ -1,0 +1,10 @@
+# Per-country L2 approval flag. Canonical source: data/countries.csv (seed + UI read from there).
+# This file is kept for reference; edit countries.csv and re-run db/seed.mjs.
+country_iso,approval_required
+AG,true
+DM,true
+GD,false
+MS,true
+KN,true
+LC,true
+VC,true

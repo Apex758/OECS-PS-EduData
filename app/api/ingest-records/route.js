@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdminOrRuliKey } from "@/lib/ruliKeyAuth";
+import { isDbConfigured, pushRequiresDbResponse } from "@/lib/dbConfig";
 import { ingestStaffRows, valLogEvent } from "@/lib/db";
 
 // Exe record-push: the standalone sends already-anonymized SAFE records here
@@ -14,6 +15,7 @@ export const runtime = "nodejs";
 const deny = () => NextResponse.json({ error: "not authorized" }, { status: 403 });
 
 export async function POST(req) {
+  if (!isDbConfigured()) return pushRequiresDbResponse();
   if (!(await isAdminOrRuliKey(req))) return deny();
 
   let body;

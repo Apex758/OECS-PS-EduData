@@ -1,120 +1,98 @@
 # OECS Post-Secondary EduData
 
-Upload student CSV → each child gets a CSPRNG random code + salt → outputs JSON.
+Institution client for OECS post-secondary SDG reporting. Upload teaching-staff spreadsheets, strip PII locally, then push anonymized records to the regional validation layer.
 
-Two ingest paths share one pipeline (`lib/ingestPipeline.js`):
+## Architecture
 
-| Path | Endpoint | Destination | Use |
-|------|----------|-------------|-----|
-| Browser upload | `POST /api/process` | JSON files (`data/output/`) | local dev, single user |
-| Push API | `POST /api/ingest` | **Postgres** (scoped to one school by API key) | production, multi-school |
+| Phase | Where | Database? | Network? |
+|-------|--------|-----------|----------|
+| **Strip & validate** | Browser | No — PII in `sessionStorage` only | No |
+| **Push to validation layer** | Server (`/api/validation/*`, `/api/ingest-records`) | Yes — Supabase | Yes |
 
-## Run
+PII (names, DOB, nationality) never hits the server during strip/validate. Only RULI codes, safe fields, and salt tokens are pushed after you explicitly click **Push stripped data**.
+
+## Quick start (no database)
 
 ```bash
-cd student-csv-app
 npm install
 npm run dev
 ```
 
-## Multi-school ingest (production)
+Open http://localhost:3000 — no `.env` required for upload and offline processing.
 
-1. **Database** — set `DATABASE_URL` (see `.env.example`; use the *pooled*
-   endpoint on Vercel). Apply schema in order:
+1. **Upload** tab → drop a staff CSV/XLSX
+2. **Strip & validate** → runs entirely in the browser
+3. Review rejected rows and fix your file if needed
+4. Identity mappings live in this tab's **session storage** (cleared when you close the tab)
 
-   ```bash
-   psql "$DATABASE_URL" -f db/schema.sql
-   psql "$DATABASE_URL" -f db/policies.sql
-   psql "$DATABASE_URL" -f db/ingest.sql      # API keys + mapping table + dedup
-   ```
+## Validation layer push (Supabase required)
 
-2. **Issue a key per school** (raw key shown once):
+When you're ready to send stripped data to the regional server:
 
-   ```bash
-   node db/gen-key.mjs JM-S1 "Kingston Primary - office PC"
-   ```
-
-3. **Push data** — schools POST to `/api/ingest`:
+1. Copy env template and add Supabase credentials:
 
    ```bash
-   curl -X POST https://<app>/api/ingest \
-     -H "X-API-Key: sk_..." \
-     -F "file=@students.csv" -F "entity=student"
+   cp .env.example .env
    ```
 
-   Accepts `.csv` and `.xlsx`. Re-uploading the same file is safe —
-   identical students are skipped (`identity_hash`), not duplicated.
-   Response: `{ school, total, inserted, skipped, rejected, ... }`.
+2. Set at minimum:
 
-### Google Sheets ingest (scheduled pull)
-
-Schools share a sheet; a daily Vercel Cron pulls it through the same pipeline.
-
-1. Create a Google Cloud **service account**, enable the **Sheets API**, set
-   `GOOGLE_SERVICE_ACCOUNT_EMAIL` + `GOOGLE_PRIVATE_KEY` + `CRON_SECRET`
-   (see `.env.example`).
-2. Apply schema: `psql "$DATABASE_URL" -f db/sheets.sql`.
-3. School shares its sheet (**Viewer**) with the service account email.
-4. Register it:
-
-   ```bash
-   node db/add-sheet.mjs JM-S1 <SPREADSHEET_ID> "A:Z"
+   ```env
+   NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
+   SUPABASE_SERVICE_ROLE_KEY=<service_role key>
    ```
 
-5. `vercel.json` schedules `/api/cron/sync-sheets` daily (02:00 UTC). Run by
-   hand:
+3. Apply the database schema (one-time):
 
-   ```bash
-   curl https://<app>/api/cron/sync-sheets -H "Authorization: Bearer $CRON_SECRET"
+   ```powershell
+   db\setup.ps1
    ```
 
-   Same pipeline + dedup as the other paths. Per-sheet result is written to
-   `school_sheets.last_status`.
+   Or run the SQL files in `db/` against your Supabase project. See `SETUP.md` for details.
 
-### Admin portal (`/admin`)
+4. Restart `npm run dev`, strip & validate a file, then click **Push stripped data**.
 
-Manage ingest credentials without the CLI. Set `ADMIN_SECRET`, open `/admin`,
-enter it once. From there:
+Push calls:
 
-- **API keys** — issue a key per school (raw shown once), see last-used, revoke.
-- **Google Sheets** — register a sheet for a school, enable/disable, see last
-  sync status.
+- `POST /api/validation/tokens` — salt tokens for cross-institution duplicate scan (no PII)
+- `POST /api/ingest-records` — safe staff rows for SDG dashboards (no PII)
 
-> Interim auth is the shared `ADMIN_SECRET`. Once Google SSO (separate effort)
-> lands, this gate is replaced by an admin-role session check. The data
-> dashboard (viewing student records by role) is owned by that SSO/RLS work.
+## Enrolment instrument workbooks
 
-Open http://localhost:3000 , upload a CSV (sample at `data/students.csv`).
+Multi-sheet SDG instrument files (Cover / Background / Enrolment) contain no PII but still need the server parser. They require Supabase configured and use `POST /api/process` with `entity=enrolment`.
 
-## Output (under `data/output/`)
+## Google Sheets
 
-- `records.json` — anonymized hierarchy, one entry per student:
-  ```json
-  {
-    "code": "<CSPRNG random code>",
-    "metadata": { "salt": "...", "hash": "...", "createdAt": "...", ... },
-    "student": { "...original CSV fields..." },
-    "tables": { "...your extra data..." }
-  }
-  ```
-- `mapping.json` — link table: original student + generated code + salt.
+Not supported on the server (would read PII). Export to CSV/XLSX and upload the file instead.
 
-## Where to edit (left empty for you)
+## Output shape
 
-| What | File |
-|------|------|
-| **Validation rules (type + content)** | `lib/validationRules.js` |
-| Validation engine (add new type handlers) | `lib/validation.js` |
-| "Other fields" / extra tables | `lib/transform.js` → `buildTables()` |
+Each accepted staff row becomes:
 
-Edit `validationRules.js` to match your CSV columns — declarative per-field
-rules (`required`, `type`, `min`/`max`, `values`, `pattern`, `unique`).
+- **Dash record** — `RULI` + non-identifying fields (classification, qualification, CPD, …)
+- **Session mapping** — `{ RULI, salt, staff: { surname, first_name, date_of_birth, nationality } }` stored only in the browser
 
-Code generation, salting, metadata, and student mapping are already wired.
+## Key files
 
-## How code/salt work
+| Path | Purpose |
+|------|---------|
+| `lib/client/processUpload.js` | Offline parse + validate + strip |
+| `lib/client/piiVault.js` | Session storage for PII mappings |
+| `lib/client/pushPayload.js` | Push stripped data to validation layer |
+| `lib/processRowsCore.js` | Shared pipeline (server + browser) |
+| `lib/sensitiveFields.js` | Which fields are PII |
+| `app/validation/` | Cross-institution duplicate console (read-only) |
 
-`lib/ruli.js`:
-- `generateCode()` — `crypto.randomBytes` (OS CSPRNG, true entropy) → hex.
-- `generateSalt()` — same.
-- `hashCode(code, salt)` — `scrypt` KDF, lets you verify a code without storing raw.
+## Optional configuration
+
+See `.env.example` for admin secrets, Auth0 SSO, Google Sheets cron ingest, and migration URLs. None of these are required for the offline strip/validate flow.
+
+## Legacy paths
+
+| Endpoint | Status |
+|----------|--------|
+| `POST /api/process` | Enrolment workbooks only |
+| `POST /api/ingest` | API-key school ingest (separate production path) |
+| `POST /api/process-sheet` | Disabled (GDPR) |
+
+For full architecture and RLS details, see `HANDOFF.md`.

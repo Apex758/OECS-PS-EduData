@@ -20,9 +20,26 @@ $Psql = "$Bin\psql.exe"
 $Root = Split-Path $PSScriptRoot -Parent
 
 # ---- connection (Supabase direct connection string) ----
-$envText = Get-Content (Join-Path $Root ".env.local")
+$envLocal = Join-Path $Root ".env.local"
+$envFile  = Join-Path $Root ".env"
+$envPath  = if (Test-Path $envLocal) { $envLocal } elseif (Test-Path $envFile) { $envFile } else { $null }
+if (-not $envPath) { Write-Error "Neither .env.local nor .env found — add SEED_DATABASE_URL or SUPABASE_DB_PASSWORD"; exit 1 }
+
+# Prefer node setup (no psql required); falls back to psql if setup.mjs missing.
+$setupMjs = Join-Path $PSScriptRoot "setup.mjs"
+if (Test-Path $setupMjs) {
+  Push-Location $Root
+  node $setupMjs
+  $code = $LASTEXITCODE
+  Pop-Location
+  if ($code -ne 0) { exit $code }
+  Write-Host "SETUP COMPLETE"
+  exit 0
+}
+
+$envText = Get-Content $envPath
 $dbUrl = (($envText | Where-Object { $_ -match '^SEED_DATABASE_URL=' }) -replace '^SEED_DATABASE_URL=','').Trim().Trim('"')
-if (-not $dbUrl) { Write-Error "SEED_DATABASE_URL not found in .env.local"; exit 1 }
+if (-not $dbUrl) { Write-Error "SEED_DATABASE_URL not found in $envPath"; exit 1 }
 
 function PsqlF([string]$file) {
   & $Psql $dbUrl -v ON_ERROR_STOP=1 -f $file
@@ -45,7 +62,10 @@ $files = @(
   "rpc.sql",
   "drilldown.sql",
   "staff.sql",
-  "enrolment.sql"
+  "enrolment.sql",
+  "approval.sql",
+  "approval-rpc.sql",
+  "approval-policies.sql"
 )
 foreach ($f in $files) {
   PsqlF (Join-Path $PSScriptRoot $f)

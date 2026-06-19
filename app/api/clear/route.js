@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
-import { clearValueAliases, clearPendingAliases, clearStaff, clearEnrolment, clearValidation } from "@/lib/db";
+import { isDbConfigured } from "@/lib/dbConfig";
+import { clearValueAliases, clearPendingAliases, clearStaff, clearEnrolment, clearValidation, clearApprovalLayer } from "@/lib/db";
 
 const OUT_DIR = path.join(process.cwd(), "data", "output");
 const ENTITIES = ["student", "staff", "institution"];
@@ -32,8 +33,22 @@ async function tryWrite(file, contents) {
   }
 }
 
-export async function POST() {
-  // 1) Wipe the database FIRST. Postgres is the source of truth for the
+export async function POST(req) {
+  let body = {};
+  try {
+    body = await req.json();
+  } catch {
+    body = {};
+  }
+  if (body.password !== "OECS") {
+    return NextResponse.json({ error: "Incorrect password — database was not cleared." }, { status: 403 });
+  }
+
+  if (!isDbConfigured()) {
+    return NextResponse.json({ ok: true, dbConfigured: false, skipped: true });
+  }
+
+  // 1) Wipe the database FIRST.
   // dashboard, so this must run regardless of whether the (ephemeral,
   // read-only on Vercel) on-disk JSON can be touched. Doing file work first
   // was the bug: an EROFS from fs.mkdir aborted the whole handler and the DB
@@ -50,9 +65,12 @@ export async function POST() {
   let aliasSnapshot = [];
   let pendingSnapshot = [];
   let validationCleared = 0;
+  let approvalCleared = false;
   try {
     await clearStaff();
     await clearEnrolment();
+    await clearApprovalLayer();
+    approvalCleared = true;
     validationCleared = (await clearValidation()).tokensCleared;
     [aliasSnapshot, pendingSnapshot] = await Promise.all([
       clearValueAliases(),
@@ -95,5 +113,5 @@ export async function POST() {
     );
   }
 
-  return NextResponse.json({ ok: !dbError, removed, aliasesCleared, pendingCleared, validationCleared, dbError });
+  return NextResponse.json({ ok: !dbError, removed, aliasesCleared, pendingCleared, validationCleared, approvalCleared, dbError });
 }

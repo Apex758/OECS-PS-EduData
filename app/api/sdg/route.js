@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
+import { isDbConfigured } from "@/lib/dbConfig";
 import { computeIndicators, computeGroups } from "@/lib/sdgIndicators";
 import { readStaffRecords, readEnrolment } from "@/lib/db";
+import { resolveReadScope } from "@/lib/readScope";
 
-// Headcount of one enrolment (T2) programme row: full-time + part-time, M + F.
 const headcount = (r) =>
   ["totalFtM", "totalFtF", "totalPtM", "totalPtF"].reduce((s, k) => s + (Number(r[k]) || 0), 0);
 
-// Sum enrolment rows into { total, byInstitution:{...}, byTerritory:{...} } pupil
-// counts -- the denominators staff-side ratios (4.c.2 / 4.c.4) divide pupils by.
 function pupilTotals(rows) {
   const byInstitution = {}, byTerritory = {};
   let total = 0;
@@ -22,11 +21,7 @@ function pupilTotals(rows) {
   return { total, byInstitution, byTerritory };
 }
 
-// SDG dashboard source: the anonymized staff dash records, now read from
-// Postgres (staff table) instead of staff-records.json. Only SAFE fields are
-// stored there -- names/DOB live in staff_mapping and are never read here.
 export const runtime = "nodejs";
-// Read live every request -- never serve a stale/cached snapshot.
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
@@ -34,27 +29,39 @@ const EMPTY = {
   count: 0, indicators: [],
   distributions: { byQualification: [], byClassification: [], byGender: [], cpdBands: [], experienceBands: [] },
   byInstitution: [], byTerritory: [],
+  dbConfigured: false,
 };
 
-export async function GET() {
+export async function GET(req) {
+  if (!isDbConfigured()) {
+    return NextResponse.json(EMPTY);
+  }
+
+  const resolved = await resolveReadScope(req);
+  if (resolved.error) {
+    return NextResponse.json({ error: resolved.error }, { status: 400 });
+  }
+  const scope = resolved.scope || {};
+  const { params } = resolved;
+
   let records, enrolment;
   try {
-    // Enrolment is read for the pupil-teacher ratios only -- a failure there
-    // must not blank the staff dashboard, so it falls back to [] (ratios "—").
     [records, enrolment] = await Promise.all([
-      readStaffRecords(),
-      readEnrolment().catch(() => []),
+      readStaffRecords(scope),
+      readEnrolment(scope).catch(() => []),
     ]);
   } catch (e) {
     return NextResponse.json({ error: `database error: ${e.message}` }, { status: 500 });
   }
-  if (!records.length) return NextResponse.json(EMPTY);
+  if (!records.length) return NextResponse.json({ ...EMPTY, dbConfigured: true });
 
   const pupils = pupilTotals(enrolment || []);
 
   return NextResponse.json({
-    ...computeIndicators(records, { pupils: pupils.total || null }), // global rollup
+    ...computeIndicators(records, { pupils: pupils.total || null }),
     byInstitution: computeGroups(records, "institution", pupils.byInstitution),
     byTerritory: computeGroups(records, "territory", pupils.byTerritory),
+    dbConfigured: true,
+    scope: params.country || params.school ? { country: params.country || null, school: params.school || null } : null,
   });
 }

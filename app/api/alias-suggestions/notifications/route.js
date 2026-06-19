@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { isDbConfigured } from "@/lib/dbConfig";
 import { listRoomNotifications, acknowledgeNotifications } from "@/lib/db";
 
 // Public, room-scoped: returns reviewed (approved/rejected) suggestions for
@@ -11,6 +12,9 @@ const ROOMS = ["institution", "ministry", "admin"];
 const roomOf = (s) => (ROOMS.includes(s) ? s : "institution");
 
 export async function GET(req) {
+  if (!isDbConfigured()) {
+    return NextResponse.json({ notifications: [] });
+  }
   try {
     const scope = roomOf(new URL(req.url).searchParams.get("scope"));
     const notifications = await listRoomNotifications(scope);
@@ -23,6 +27,9 @@ export async function GET(req) {
 // Dismiss notifications. body: { scope, ids?: number[] } — omit ids to dismiss
 // all of that room's.
 export async function POST(req) {
+  if (!isDbConfigured()) {
+    return NextResponse.json({ ok: true });
+  }
   try {
     const body = await req.json().catch(() => ({}));
     await acknowledgeNotifications(roomOf(body.scope), body.ids);

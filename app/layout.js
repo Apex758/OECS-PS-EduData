@@ -1,4 +1,5 @@
 import Providers from "./providers";
+import { CHUNK_RECOVERY_INLINE_SCRIPT } from "@/lib/client/chunkRecovery";
 
 export const metadata = {
   title: "OECS Post-Secondary EduData",
@@ -12,17 +13,17 @@ const THEME_CSS = `
 :root {
   --bg: #0f1012;
   --card: #181c21;
-  --card-alt: #14202e;
-  --code-bg: #1c2230;
-  --text: #e8dfc8;
-  --muted: #7a8090;
+  --card-alt: #141f2e;
+  --code-bg: #1c2430;
+  --text: #c8d5e8;
+  --muted: #7a8390;
   --border: #252a32;
-  --accent: #f97316;
-  --accent-soft: #2a1500;
+  --accent: #1675f9;
+  --accent-soft: #00112a;
   --field-bg: #161a20;
   --drop-bg: #0c0e12;
   --drop-bg-active: #1a2a40;
-  --disabled: #2c3240;
+  --disabled: #2c3440;
   --err-bg: #1a0e0e;
   --err-text: #f87171;
   --err-border: #3a1818;
@@ -32,25 +33,25 @@ const THEME_CSS = `
   color-scheme: dark;
 }
 :root[data-theme="light"] {
-  --bg: #f5f0e8;
-  --text: #1e1610;
-  --border: #ddd0bc;
-  --muted: #7a6a58;
-  --accent: #2d5a3d;
-  --accent-soft: #daeee0;
+  --bg: #e8edf5;
+  --text: #10161e;
+  --border: #bccadd;
+  --muted: #58667a;
+  --accent: #2d405a;
+  --accent-soft: #dae2ee;
   --card: #ffffff;
-  --card-alt: #f5ede0;
+  --card-alt: #e0e9f5;
   --err-bg: #fef2f2;
   --err-text: #b91c1c;
   --err-border: #fecaca;
-  --code-bg: #ede5d4;
+  --code-bg: #d4deed;
   --good: #2d5a3d;
   --bad: #c0384c;
-  --field-bg: #fefcf8;
-  --drop-bg: #fefcf8;
-  --drop-bg-active: #d4eed8;
-  --disabled: #c8c0b0;
-  --shadow: 1px 2px 4px rgba(100,60,0,0.08),2px 8px 16px rgba(100,60,0,0.05),4px 16px 32px rgba(100,60,0,0.03);
+  --field-bg: #f8fbfe;
+  --drop-bg: #f8fbfe;
+  --drop-bg-active: #d4dfee;
+  --disabled: #b0bac8;
+  --shadow: 1px 2px 4px rgba(20,60,120,0.08),2px 8px 16px rgba(20,60,120,0.05),4px 16px 32px rgba(20,60,120,0.03);
   color-scheme: light;
 }
 body { transition: background .2s ease, color .2s ease; }
@@ -63,6 +64,7 @@ export default function RootLayout({ children }) {
     <html lang="en">
       <head>
         <style dangerouslySetInnerHTML={{ __html: THEME_CSS }} />
+        <script dangerouslySetInnerHTML={{ __html: CHUNK_RECOVERY_INLINE_SCRIPT }} />
       </head>
       <body
         style={{

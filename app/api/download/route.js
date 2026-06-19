@@ -1,6 +1,6 @@
 import fs from "fs/promises";
 import path from "path";
-import { readStaffRecords, readStaffMapping } from "@/lib/db";
+import { readStaffRecords } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -22,10 +22,13 @@ export async function GET(req) {
 
   // Staff is Postgres-backed -> rebuild the records/mapping JSON from the DB.
   if (entity === "staff") {
+    if (type === "mapping") {
+      return new Response(JSON.stringify({ error: "PII mappings are not stored on the server — they live in your browser session only." }), {
+        status: 403, headers: { "content-type": "application/json" },
+      });
+    }
     try {
-      const payload = type === "records"
-        ? await readStaffRecords()
-        : Object.values(await readStaffMapping());
+      const payload = await readStaffRecords();
       return new Response(JSON.stringify(payload, null, 2), {
         status: 200,
         headers: {

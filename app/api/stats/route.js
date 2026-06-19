@@ -1,25 +1,39 @@
 import { NextResponse } from "next/server";
-import { readStaffRecords, readStaffMapping, readStaffRejected } from "@/lib/db";
+import { isDbConfigured } from "@/lib/dbConfig";
+import { readStaffRecords, readStaffRejected } from "@/lib/db";
+import { resolveReadScope } from "@/lib/readScope";
 
-// Dashboard table source, all from Postgres (was on-disk JSON):
-//   staff          -> anonymized dash records + columns/rows
-//   staff_mapping  -> RULI->PII mapping for row-expand reveal
-//   staff_rejected -> failed-validation rows for the rejected view
+// Dashboard table source from Postgres (stripped records only, after push).
+// PII mappings live in institution session storage — never read from staff_mapping.
 export const runtime = "nodejs";
-// Read live every request -- never serve a stale/cached snapshot.
 export const dynamic = "force-dynamic";
 export const fetchCache = "force-no-store";
 
-export async function GET() {
-  let records, mappingByRuli, rejected;
+const EMPTY = { entities: [], totalRecords: 0, dbConfigured: false };
+
+export async function GET(req) {
+  if (!isDbConfigured()) {
+    return NextResponse.json(EMPTY);
+  }
+
+  const resolved = await resolveReadScope(req);
+  if (resolved.error) {
+    return NextResponse.json({ error: resolved.error }, { status: 400 });
+  }
+  const scope = resolved.scope || {};
+  const { params } = resolved;
+
+  let records, rejected;
   try {
-    [records, mappingByRuli, rejected] = await Promise.all([
-      readStaffRecords(), readStaffMapping(), readStaffRejected(),
+    [records, rejected] = await Promise.all([
+      readStaffRecords(scope),
+      readStaffRejected(scope),
     ]);
   } catch (e) {
     return NextResponse.json({ error: `database error: ${e.message}` }, { status: 500 });
   }
 
+  const mappingByRuli = {};
   const rejColumns = [];
   for (const r of rejected) {
     for (const k of Object.keys(r?.data ?? {})) {
@@ -54,5 +68,10 @@ export async function GET() {
       }]
     : [];
 
-  return NextResponse.json({ entities, totalRecords: records.length });
+  return NextResponse.json({
+    entities,
+    totalRecords: records.length,
+    dbConfigured: true,
+    scope: params.country || params.school ? { country: params.country || null, school: params.school || null } : null,
+  });
 }

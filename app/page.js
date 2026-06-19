@@ -1,7 +1,7 @@
-﻿"use client";
+"use client";
 
 import { useState, useEffect, useCallback, useRef, Fragment, createContext, useContext } from "react";
-import { useSession, signIn, signOut } from "next-auth/react";
+import { useSession, signIn } from "next-auth/react";
 import {
   ResponsiveContainer, RadialBarChart, RadialBar, PolarAngleAxis,
   PieChart, Pie, Cell, BarChart, Bar as RBar, XAxis, YAxis,
@@ -10,6 +10,9 @@ import {
 import CopyableId from "./components/CopyableId";
 import ValidationRules from "./components/ValidationRules";
 import CalculationDocs from "./components/CalculationDocs";
+import { processFileOffline, isEnrolmentWorkbookFile } from "@/lib/client/processUpload";
+import { pushToApprovalLayer } from "@/lib/client/pushPayload";
+import { getMappingByRuli, vaultSize, clearVault } from "@/lib/client/piiVault";
 import {
   Clock, Lock, Globe, Check, X as XIcon,
   Circle, CircleDot, CircleCheck, CircleX, Loader2,
@@ -37,37 +40,39 @@ const COLORS = {
   disabled: "var(--disabled)",
 };
 
+const WARN_BLUE = "#5b9bd5";
+
 const DARK_PALETTES = [
   {
     name:"Night",
-    // bg/card: deep + lighter charcoal layers; card-alt: azure-mist tint; accent: electric ginger; text: off-white parchment
+    // bg/card: deep + lighter charcoal layers; card-alt: azure-mist tint; accent: electric blue; text: cool off-white
     vars:{
       "--bg":"#0f1012",        // deep charcoal — darkest layer
       "--card":"#181c21",      // lighter charcoal — cards float above
-      "--card-alt":"#14202e",  // azure mist tint — alt sections feel distinct
-      "--code-bg":"#1c2230",   // deeper azure mist for data/code blocks
-      "--text":"#e8dfc8",      // off-white parchment — warm, readable
-      "--muted":"#7a8090",     // cool charcoal grey
+      "--card-alt":"#141f2e",  // azure mist tint — alt sections feel distinct
+      "--code-bg":"#1c2430",   // deeper azure mist for data/code blocks
+      "--text":"#c8d5e8",      // cool off-white — readable
+      "--muted":"#7a8390",     // cool charcoal grey
       "--border":"#252a32",    // charcoal border
-      "--accent":"#f97316",    // electric ginger — punchy highlight
-      "--accent-soft":"#2a1500",
+      "--accent":"#1675f9",    // electric blue — punchy highlight
+      "--accent-soft":"#00112a",
       "--field-bg":"#161a20",
       "--drop-bg":"#0c0e12",
       "--drop-bg-active":"#1a2a40",
-      "--disabled":"#2c3240",
+      "--disabled":"#2c3440",
       "--err-bg":"#1a0e0e","--err-text":"#f87171","--err-border":"#3a1818",
       "--good":"#4ade80","--bad":"#f87171",
       "--shadow":"1px 2px 4px rgba(0,0,0,0.5),2px 8px 24px rgba(0,0,0,0.35),4px 16px 48px rgba(0,0,0,0.22)",
     },
-    series:["#f97316","#5b9bd5","#e8dfc8","#c084fc","#4ade80","#facc15"],
+    series:["#1675f9","#5b9bd5","#c8d5e8","#c084fc","#4ade80","#1574fa"],
   },
 ];
 
 const LIGHT_PALETTES = [
   {
-    name:"Ivory",
-    vars:{"--bg":"#f5f0e8","--text":"#1e1610","--border":"#ddd0bc","--muted":"#7a6a58","--accent":"#2d5a3d","--accent-soft":"#daeee0","--card":"#ffffff","--card-alt":"#f5ede0","--err-bg":"#fef2f2","--err-text":"#b91c1c","--err-border":"#fecaca","--code-bg":"#ede5d4","--good":"#2d5a3d","--bad":"#c0384c","--field-bg":"#fefcf8","--drop-bg":"#fefcf8","--drop-bg-active":"#d4eed8","--disabled":"#c8c0b0","--shadow":"1px 2px 4px rgba(100,60,0,0.08),2px 8px 16px rgba(100,60,0,0.05),4px 16px 32px rgba(100,60,0,0.03)"},
-    series:["#2d5a3d","#8b5e3c","#4a9eff","#c084fc","#e05c7a","#f59e0b"],
+    name:"Frost",
+    vars:{"--bg":"#e8edf5","--text":"#10161e","--border":"#bccadd","--muted":"#58667a","--accent":"#2d405a","--accent-soft":"#dae2ee","--card":"#ffffff","--card-alt":"#e0e9f5","--err-bg":"#fef2f2","--err-text":"#b91c1c","--err-border":"#fecaca","--code-bg":"#d4deed","--good":"#2d5a3d","--bad":"#c0384c","--field-bg":"#f8fbfe","--drop-bg":"#f8fbfe","--drop-bg-active":"#d4dfee","--disabled":"#b0bac8","--shadow":"1px 2px 4px rgba(20,60,120,0.08),2px 8px 16px rgba(20,60,120,0.05),4px 16px 32px rgba(20,60,120,0.03)"},
+    series:["#2d405a","#3c5d8b","#4a9eff","#c084fc","#e05c7a","#0b6cf5"],
   },
 ];
 
@@ -95,9 +100,19 @@ export default function Home() {
   useAdminTokenKeyguard();
   const [tab, setTab] = useState("upload");
   const [view, setView] = useState("institution");
+  const [demoCountry, setDemoCountry] = useState("LC");
+  const countries = useCountriesConfig();
+  useDemoPersona(view, demoCountry, countries);
+
+  const switchView = useCallback((next) => {
+    if (next === view) return;
+    clearVault();
+    setView(next);
+    window.dispatchEvent(new Event("oecs:ui-refresh"));
+  }, [view]);
   const [theme, setTheme] = useState("light");
   const [darkPalette, setDarkPalette] = useState("Night");
-  const [lightPalette, setLightPalette] = useState("Ivory");
+  const [lightPalette, setLightPalette] = useState("Frost");
 
   const paletteName = theme === "dark" ? darkPalette : lightPalette;
   const setPaletteName = theme === "dark" ? setDarkPalette : setLightPalette;
@@ -106,12 +121,13 @@ export default function Home() {
 
   useEffect(() => {
     if (view !== "admin" && (tab === "access" || tab === "validation" || tab === "calculations")) setTab("dashboard");
+    if (view !== "ministry" && tab === "approvals") setTab("dashboard");
   }, [view, tab]);
 
   useEffect(() => {
     const t = localStorage.getItem("theme") || "light";
     const pd = localStorage.getItem("palette_dark") || "Night";
-    const pl = localStorage.getItem("palette_light") || "Ivory";
+    const pl = localStorage.getItem("palette_light") || "Frost";
     setTheme(t);
     setDarkPalette(pd);
     setLightPalette(pl);
@@ -126,7 +142,7 @@ export default function Home() {
 
   return (
     <PaletteCtx.Provider value={palette.series}>
-      <main style={{ maxWidth: 1280, margin: "0 auto", padding: "32px 40px" }}>
+      <main style={{ maxWidth: 1280, margin: "0 auto", padding: "32px 40px", backgroundColor: "var(--bg)" }}>
         <header style={{ marginBottom: 32, display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 16 }}>
           <div>
             <h1 style={{ fontSize: 28, fontWeight: 600, margin: 0, display: "flex", alignItems: "center", gap: 10 }}>
@@ -138,10 +154,11 @@ export default function Home() {
             </p>
           </div>
           {/* View-as switcher (demo) — top-right, always available */}
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end", marginTop: 6 }}>
-            <ModeButton active={view === "institution"} onClick={() => setView("institution")}>Institution</ModeButton>
-            <ModeButton active={view === "ministry"} onClick={() => setView("ministry")}>Ministry</ModeButton>
-            <ModeButton active={view === "admin"} onClick={() => setView("admin")}>Admin</ModeButton>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, marginTop: 6 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <ModeButton active={view === "institution"} onClick={() => switchView("institution")}>Institution</ModeButton>
+            <ModeButton active={view === "ministry"} onClick={() => switchView("ministry")}>Ministry</ModeButton>
+            <ModeButton active={view === "admin"} onClick={() => switchView("admin")}>Admin</ModeButton>
             <a
               href="/validation"
               style={{
@@ -160,6 +177,8 @@ export default function Home() {
               Validation layer
             </a>
           </div>
+          <span style={{ fontSize: 12, color: COLORS.muted }}>Demo: {demoPersonaLabel(view, demoCountry, countries)}</span>
+          </div>
         </header>
 
         <nav style={{ display: "flex", gap: 4, marginBottom: 24, borderBottom: `1px solid ${COLORS.border}` }}>
@@ -172,6 +191,11 @@ export default function Home() {
           <TabButton active={tab === "enrolment"} onClick={() => setTab("enrolment")}>
             Enrolment
           </TabButton>
+          {view === "ministry" && (
+            <TabButton active={tab === "approvals"} onClick={() => setTab("approvals")}>
+              Approvals
+            </TabButton>
+          )}
           {view === "admin" && (
             <TabButton active={tab === "access"} onClick={() => setTab("access")}>
               Access (RLS)
@@ -191,11 +215,18 @@ export default function Home() {
 
         {/* Kept mounted (hidden via CSS) so the upload queue + results survive
             tab switches; conditional unmount would drop the in-memory File list. */}
-        <div style={{ display: tab === "upload" ? "block" : "none" }}>
+        <div style={{ display: tab === "upload" ? "block" : "none" }} key={view}>
           <UploadPanel view={view} />
         </div>
-        {tab === "dashboard" && <Dashboard view={view} setView={setView} />}
-        {tab === "enrolment" && <EnrolmentDashboard view={view} />}
+        {tab === "dashboard" && (
+          <Dashboard view={view} demoCountry={demoCountry} setDemoCountry={setDemoCountry} countries={countries} />
+        )}
+        {tab === "enrolment" && (
+          <EnrolmentDashboard view={view} demoCountry={demoCountry} setDemoCountry={setDemoCountry} countries={countries} />
+        )}
+        {tab === "approvals" && view === "ministry" && (
+          <ApprovalsPanel demoCountry={demoCountry} setDemoCountry={setDemoCountry} countries={countries} />
+        )}
         {tab === "access" && <AccessDemo />}
         {tab === "validation" && <ValidationRules />}
         {tab === "calculations" && <CalculationDocs />}
@@ -319,9 +350,87 @@ const VIEW_ROLE = {
   admin:       "admin",
 };
 
+// Demo personas — auto-signed-in when switching Institution / Ministry / Admin.
+const DEMO_INSTITUTION_EMAIL = "lecturer.lc@demo.local";
+const DEMO_ADMIN_EMAIL = "admin@demo.local";
+
+function demoEmailForView(view, countryIso = "LC", countries = []) {
+  if (view === "admin") return DEMO_ADMIN_EMAIL;
+  if (view === "ministry") {
+    const c = countries.find((x) => x.iso === countryIso) || countries[0];
+    return c?.ministerEmail || `minister.${String(countryIso).toLowerCase()}@demo.local`;
+  }
+  return DEMO_INSTITUTION_EMAIL;
+}
+
+function demoPersonaLabel(view, countryIso = "LC", countries = []) {
+  if (view === "admin") return "OECS Admin";
+  if (view === "ministry") {
+    const c = countries.find((x) => x.iso === countryIso) || countries[0];
+    if (!c) return "Minister";
+    return `${c.name} Minister · ${c.approvalRequired ? "L2 approval on" : "L2 auto-approve"}`;
+  }
+  return "Sir Arthur Lewis (LC-CC)";
+}
+
+function useDemoPersona(view, demoCountry, countries) {
+  const { data: session, status } = useSession();
+  const signing = useRef(false);
+
+  useEffect(() => {
+    if (status === "loading") return;
+    if (view === "ministry" && !countries.length) return;
+    const email = demoEmailForView(view, demoCountry, countries);
+    if (session?.user?.email?.toLowerCase() === email.toLowerCase()) return;
+    if (signing.current) return;
+    signing.current = true;
+    signIn("credentials", { email, redirect: false }).finally(() => {
+      signing.current = false;
+    });
+  }, [view, demoCountry, countries, status, session?.user?.email]);
+}
+
+function useCountriesConfig() {
+  const [countries, setCountries] = useState([]);
+  useEffect(() => {
+    fetch("/api/countries-config")
+      .then((r) => r.json())
+      .then((d) => setCountries(d.countries || []))
+      .catch(() => setCountries([]));
+  }, []);
+  return countries;
+}
+
+function useUiRefresh(onRefresh) {
+  useEffect(() => {
+    const handler = () => onRefresh();
+    window.addEventListener("oecs:ui-refresh", handler);
+    return () => window.removeEventListener("oecs:ui-refresh", handler);
+  }, [onRefresh]);
+}
+
+function buildDbScopeQuery(view, { demoCountry, adminCountry, adminSchool }) {
+  const p = new URLSearchParams();
+  if (view === "ministry" && demoCountry) p.set("country", demoCountry);
+  if (view === "admin") {
+    if (adminCountry && adminCountry !== "__all__") p.set("country", adminCountry);
+    if (adminSchool && adminSchool !== "__all__") p.set("school", adminSchool);
+  }
+  const qs = p.toString();
+  return qs ? `?${qs}` : "";
+}
+
 // Entities a user can upload. staff feeds the SDG dashboard; student +
 // institution validate/store against the OECS RMR rules (lib/validationRules.js).
 const UPLOAD_ENTITIES = ["staff", "enrolment", "student", "institution"];
+
+function canPushToApprovalLayer(entry) {
+  if (!entry?.result || entry.pushed) return false;
+  const r = entry.result;
+  if (r.entity === "staff" && r.clientProcessed && r._accepted?.length > 0) return true;
+  if (r.entity === "enrolment" && r.readyToPush && r._accepted?.length > 0) return true;
+  return false;
+}
 
 function UploadPanel({ view = "institution" }) {
   // Role demoed is driven by the dashboard view toggle.
@@ -336,6 +445,7 @@ function UploadPanel({ view = "institution" }) {
   const [preview, setPreview] = useState(null); // entry being previewed in modal
   const [dragOver, setDragOver] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [pushingId, setPushingId] = useState(null);
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteFlash, setPasteFlash] = useState(false);
   const [sheetUrl, setSheetUrl] = useState("");
@@ -410,6 +520,8 @@ function UploadPanel({ view = "institution" }) {
 
   function clearDone() {
     setQueue((q) => q.filter((e) => e.status === "pending" || e.status === "processing"));
+    clearVault();
+    window.dispatchEvent(new Event("oecs:ui-refresh"));
   }
 
   async function processAll() {
@@ -418,33 +530,68 @@ function UploadPanel({ view = "institution" }) {
     for (const entry of pending) {
       setQueue((q) => q.map((e) => e.id === entry.id ? { ...e, status: "processing" } : e));
       try {
-        let res;
         if (entry.kind === "sheet") {
-          res = await fetch("/api/process-sheet", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ url: entry.url, entity }),
-          });
-        } else {
-          const fd = new FormData();
-          fd.append("file", entry.file);
-          fd.append("entity", entity);
-          res = await fetch("/api/process", { method: "POST", body: fd });
-        }
-        const json = await res.json();
-        if (!res.ok) {
           setQueue((q) => q.map((e) => e.id === entry.id ? {
             ...e, status: "error",
-            error: json.error + (json.errors ? ": " + json.errors.join(", ") : ""),
+            error: "Export the sheet to CSV/XLSX and upload the file — PII must not be read on the server.",
           } : e));
-        } else {
-          setQueue((q) => q.map((e) => e.id === entry.id ? { ...e, status: "done", result: json } : e));
+          continue;
         }
+
+        let json;
+        if (await isEnrolmentWorkbookFile(entry.file)) {
+          const fd = new FormData();
+          fd.append("file", entry.file);
+          fd.append("entity", "enrolment");
+          const res = await fetch("/api/process", { method: "POST", body: fd });
+          json = await res.json();
+          if (!res.ok) {
+            setQueue((q) => q.map((e) => e.id === entry.id ? {
+              ...e, status: "error",
+              error: json.error + (json.errors ? ": " + json.errors.join(", ") : ""),
+            } : e));
+            continue;
+          }
+        } else {
+          json = await processFileOffline(entry.file, { entity });
+          if (json.error) {
+            setQueue((q) => q.map((e) => e.id === entry.id ? {
+              ...e, status: "error",
+              error: json.error + (json.errors ? ": " + json.errors.join(", ") : ""),
+            } : e));
+            continue;
+          }
+        }
+
+        setQueue((q) => q.map((e) => e.id === entry.id ? {
+          ...e, status: "done", result: json, pushed: false,
+        } : e));
       } catch (err) {
         setQueue((q) => q.map((e) => e.id === entry.id ? { ...e, status: "error", error: String(err) } : e));
       }
     }
     setProcessing(false);
+  }
+
+  async function pushEntry(entry) {
+    if (!canPushToApprovalLayer(entry)) return;
+    setPushingId(entry.id);
+    setQueue((q) => q.map((e) => e.id === entry.id ? { ...e, pushError: null } : e));
+    try {
+      const out = await pushToApprovalLayer(entry);
+      setQueue((q) => q.map((e) => e.id === entry.id ? {
+        ...e,
+        pushed: true,
+        pushResult: out,
+      } : e));
+    } catch (err) {
+      setQueue((q) => q.map((e) => e.id === entry.id ? {
+        ...e,
+        pushError: String(err.message || err),
+      } : e));
+    } finally {
+      setPushingId(null);
+    }
   }
 
   const pendingCount = queue.filter((e) => e.status === "pending").length;
@@ -548,7 +695,9 @@ function UploadPanel({ view = "institution" }) {
                 )}
               </div>
               <div style={{ fontSize: 16, fontWeight: 500 }}>Drop CSV / XLSX files here or click to browse</div>
-              <div style={{ fontSize: 14, color: COLORS.muted, marginTop: 4 }}>Mix staff and enrolment workbooks — each is auto-detected and routed to the right flow</div>
+              <div style={{ fontSize: 14, color: COLORS.muted, marginTop: 4 }}>
+                Validate runs offline in your browser — PII stays in session storage until you push records.
+              </div>
               <input
                 ref={inputRef}
                 type="file"
@@ -597,6 +746,7 @@ function UploadPanel({ view = "institution" }) {
                   {entry.status === "done" && entry.result && (
                     <span style={{ fontSize: 12, color: COLORS.good }}>
                       {entry.result.accepted} accepted{entry.result.rejected?.length > 0 ? ` · ${entry.result.rejected.length} rejected` : ""}
+                      {entry.pushed ? " · submitted" : canPushToApprovalLayer(entry) ? " · ready to submit" : entry.result.clientProcessed ? " · stripped locally" : entry.result.readyToPush ? " · validated" : ""}
                     </span>
                   )}
                   {entry.status === "error" && (
@@ -622,20 +772,21 @@ function UploadPanel({ view = "institution" }) {
 
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
             <span style={{ fontSize: 13, color: COLORS.muted }}>
-              Record type is detected automatically from the file's columns.
+              Record type is detected automatically. Validate stays offline; use <strong>Submit for Approval</strong> when ready for ministry review.
+              {vaultSize() > 0 ? ` ${vaultSize()} identity mapping(s) in this tab's session storage.` : ""}
             </span>
             <button
               onClick={processAll}
               disabled={processing || pendingCount === 0}
               style={{
                 width: "100%",
-                background: processing || pendingCount === 0 ? COLORS.disabled : COLORS.accent,
-                color: "#fff", border: "none", borderRadius: 8,
+                background: processing || pendingCount === 0 ? "rgba(143, 213, 114, 1)" : COLORS.accent,
+                color: processing || pendingCount === 0 ? "rgba(0, 0, 0, 1)" : "#fff", border: "none", borderRadius: 8,
                 padding: "16px 20px", fontSize: 16, fontWeight: 600,
                 cursor: processing || pendingCount === 0 ? "default" : "pointer",
               }}
             >
-              {processing ? "Aggregating…" : pendingCount > 0 ? `Aggregate Data · ${pendingCount} source${pendingCount > 1 ? "s" : ""}` : "Aggregate Data"}
+              {processing ? "Validating…" : pendingCount > 0 ? `Validate · ${pendingCount} source${pendingCount > 1 ? "s" : ""}` : "Validate"}
             </button>
             {(doneCount > 0 || errorCount > 0) && (
               <button onClick={clearDone} style={ghostButton}>Clear finished</button>
@@ -656,6 +807,69 @@ function UploadPanel({ view = "institution" }) {
           <p style={{ fontSize: 13, fontWeight: 600, color: COLORS.muted, margin: "0 0 8px", textTransform: "uppercase", letterSpacing: "0.04em" }}>
             {entry.file.name}
           </p>
+          {view === "institution" && canPushToApprovalLayer(entry) && (
+            <Card style={{ marginBottom: 12, borderColor: COLORS.accent }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center", justifyContent: "space-between" }}>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 600 }}>Submit for Approval</div>
+                  <p style={{ margin: "4px 0 0", fontSize: 13, color: COLORS.muted }}>
+                    Send validated {entry.result.entity} data for campus L1 and country L2 review. Nothing is sent to the server until you click the button below.
+                  </p>
+                  {entry.pushError && (
+                    <p style={{ margin: "6px 0 0", fontSize: 13, color: COLORS.bad }}>{entry.pushError}</p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => pushEntry(entry)}
+                  disabled={entry.pushed || pushingId === entry.id || !navigator.onLine}
+                  title={!navigator.onLine ? "Connect to the internet to submit" : undefined}
+                  style={{
+                    background: entry.pushed || pushingId === entry.id || !navigator.onLine ? COLORS.disabled : COLORS.accent,
+                    color: "#fff", border: "none", borderRadius: 8,
+                    padding: "12px 20px", fontSize: 14, fontWeight: 600,
+                    cursor: entry.pushed || pushingId === entry.id || !navigator.onLine ? "default" : "pointer",
+                  }}
+                >
+                  {pushingId === entry.id ? "Submitting…" : entry.pushed ? "Submitted for approval" : "Submit for Approval"}
+                </button>
+              </div>
+            </Card>
+          )}
+          {entry.pushResult && (
+            <Card style={{
+              marginBottom: 16,
+              border: `2px solid ${entry.pushResult.status === "pending_l2" ? COLORS.accent : COLORS.good}`,
+              background: entry.pushResult.status === "pending_l2" ? COLORS.accentSoft : "color-mix(in srgb, var(--good) 18%, var(--card))",
+            }}>
+              <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+                <CircleCheck size={32} strokeWidth={2.5} color={entry.pushResult.status === "pending_l2" ? COLORS.accent : COLORS.good} style={{ flexShrink: 0, marginTop: 2 }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 6 }}>
+                    {entry.pushResult.status === "pending_l2"
+                      ? "Submitted — awaiting minister approval (L2)"
+                      : "Submitted — approved and visible to OECS"}
+                  </div>
+                  <p style={{ margin: "0 0 8px", fontSize: 15, color: COLORS.text, lineHeight: 1.5 }}>
+                    Submitted <strong>{entry.pushResult.recordsInserted}</strong> record(s)
+                    {entry.pushResult.recordsSkipped ? ` · ${entry.pushResult.recordsSkipped} skipped (duplicate)` : ""}
+                    {entry.pushResult.aggregations ? ` · ${entry.pushResult.aggregations} SDG aggregate(s) computed` : ""}
+                    {entry.pushResult.duplicatesFound ? ` · ${entry.pushResult.duplicatesFound} cross-institution duplicate flag(s)` : ""}
+                  </p>
+                  {entry.pushResult.submissionId != null && (
+                    <p style={{ margin: 0, fontSize: 14, color: COLORS.muted }}>
+                      Submission ID: <CopyableId value={String(entry.pushResult.submissionId)} />
+                    </p>
+                  )}
+                  {entry.pushResult.status === "pending_l2" && (
+                    <p style={{ margin: "10px 0 0", fontSize: 14, color: COLORS.text }}>
+                      Switch to <strong>Ministry</strong> view → <strong>Approvals</strong> tab to review and approve this submission.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </Card>
+          )}
           <ResultView result={entry.result} scope={scope} />
         </div>
       ))}
@@ -891,8 +1105,8 @@ function SuggestionsSection({ result, scope, standalone = false }) {
             </span>
             {s.submitted ? (
               <span style={{
-                fontSize: 13, fontWeight: 600, color: "#92400e",
-                background: "#fef3c7", border: "1px solid #fde68a",
+                fontSize: 13, fontWeight: 600, color: "#0e4592",
+                background: "#c7defe", border: "1px solid #8abafd",
                 borderRadius: 6, padding: "3px 10px",
                 display: "inline-flex", alignItems: "center", gap: 6,
               }}>
@@ -1184,26 +1398,57 @@ function UploaderNotifications({ entity = "staff", scope = "institution" }) {
 // (4.5.1) is shown as a ratio card instead of a gauge.
 const SDG_GAUGE_CODES = ["4.c.1", "4.c.7", "4.c.6"];
 
-function Dashboard({ view, setView }) {
+function Dashboard({ view, demoCountry, setDemoCountry, countries }) {
   const [stats, setStats] = useState(null);
   const [sdg, setSdg] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [clearing, setClearing] = useState(false);
-  const [selInst, setSelInst] = useState(null);      // chosen institution (institution view)
-  const [selTerr, setSelTerr] = useState(null);      // chosen territory (ministry view)
-  const [dashTab, setDashTab] = useState("stats");   // institution sub-tab
+  const [selInst, setSelInst] = useState(null);
+  const [selTerr, setSelTerr] = useState(null);
+  const [dashTab, setDashTab] = useState("stats");
+  const [adminCountry, setAdminCountry] = useState("__all__");
+  const [adminSchool, setAdminSchool] = useState("__all__");
+  const [schools, setSchools] = useState([]);
+
+  useEffect(() => {
+    if (view !== "admin") return;
+    const country = adminCountry === "__all__" ? "" : adminCountry;
+    fetch(`/api/schools-config${country ? `?country=${encodeURIComponent(country)}` : ""}`)
+      .then((r) => r.json())
+      .then((d) => setSchools(d.schools || []))
+      .catch(() => setSchools([]));
+    setAdminSchool("__all__");
+  }, [view, adminCountry]);
+
+  const scopeQuery = buildDbScopeQuery(view, { demoCountry, adminCountry, adminSchool });
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [sRes, gRes] = await Promise.all([fetch("/api/stats"), fetch("/api/sdg")]);
+      const fetchOpts = { credentials: "include" };
+      const [sRes, gRes] = await Promise.all([
+        fetch(`/api/stats${scopeQuery}`, fetchOpts),
+        fetch(`/api/sdg${scopeQuery}`, fetchOpts),
+      ]);
       const sJson = await sRes.json();
       const gJson = await gRes.json().catch(() => null);
       if (!sRes.ok) setError(sJson.error || "Failed to load stats");
       else {
-        setStats(sJson);
+        const vault = view === "institution" ? getMappingByRuli() : {};
+        const vaultKeys = Object.keys(vault);
+        const entities = (sJson.entities || []).map((e) => {
+          const merged = { ...(e.mappingByRuli || {}), ...vault };
+          return {
+            ...e,
+            mappingByRuli: merged,
+            mapped: vaultKeys.length > 0
+              ? (e.rows || []).filter((r) => merged[r.RULI]).length
+              : (e.mapped ?? 0),
+          };
+        });
+        setStats({ ...sJson, entities, sessionMappings: vaultKeys.length });
         setSdg(gRes.ok ? gJson : null);
       }
     } catch (err) {
@@ -1211,22 +1456,33 @@ function Dashboard({ view, setView }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [scopeQuery, view]);
 
   const clearAll = useCallback(async () => {
-    if (!window.confirm("Delete ALL records, RULI mappings, and approved validation rules?\n\nA backup of the validation rules will be saved to data/output/value-aliases-backup.json before they are removed. This cannot be undone.")) return;
+    const pw = window.prompt("Clear ALL database records, submissions, and validation rules?\n\nEnter password to confirm:");
+    if (pw === null) return;
+    if (pw !== "OECS") {
+      setError("Incorrect password — database was not cleared.");
+      return;
+    }
     setClearing(true);
     setError(null);
     try {
-      const res = await fetch("/api/clear", { method: "POST" });
+      const res = await fetch("/api/clear", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ password: "OECS" }),
+      });
       const json = await res.json();
       if (!res.ok) setError(json.error || "Failed to clear database");
       else if (json.dbError) {
-        // Files cleared, but the DB (alias rules) was NOT — half reset. Warn
-        // loudly so it never looks like a clean slate when it isn't.
         setError(`Files cleared, but validation rules were NOT — database unreachable: ${json.dbError}. Approved/pending aliases still active. Check DATABASE_URL.`);
         await load();
-      } else await load();
+      } else {
+        clearVault();
+        window.dispatchEvent(new Event("oecs:ui-refresh"));
+        await load();
+      }
     } catch (err) {
       setError(String(err));
     } finally {
@@ -1238,11 +1494,15 @@ function Dashboard({ view, setView }) {
     load();
   }, [load]);
 
+  useUiRefresh(load);
+
   if (loading) return <Card><span style={{ color: COLORS.muted }}>Loading…</span></Card>;
   if (error) return <Card style={{ background: COLORS.errBg, borderColor: COLORS.errBorder }}><span style={{ color: COLORS.errText }}>{error}</span></Card>;
 
   const hasData = stats && stats.entities.length > 0;
-  const totalMapped = hasData ? stats.entities.reduce((n, e) => n + (e.mapped || 0), 0) : 0;
+  const dbConfigured = stats?.dbConfigured !== false;
+  const sessionMappings = stats?.sessionMappings || 0;
+  const totalMapped = hasData ? stats.entities.reduce((n, e) => n + (e.mapped || 0), 0) : sessionMappings;
 
   const byInstitution = sdg?.byInstitution || [];
   const byTerritory = sdg?.byTerritory || [];
@@ -1258,7 +1518,7 @@ function Dashboard({ view, setView }) {
   const SUBTITLE = {
     institution: "One institution — staff, qualifications, CPD, attrition.",
     ministry: "One territory — institutions compared on SDG 4.c.",
-    admin: "OECS-wide — territories and reporting completeness.",
+    admin: "OECS-wide — ministry-approved submissions only.",
   };
 
   return (
@@ -1271,20 +1531,73 @@ function Dashboard({ view, setView }) {
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
           <UploaderNotifications entity="staff" scope={view} />
           <button onClick={load} style={ghostButton}>Refresh</button>
-          <button
-            onClick={clearAll}
-            disabled={clearing || !hasData}
-            style={{ ...dangerButton, opacity: clearing || !hasData ? 0.5 : 1, cursor: clearing || !hasData ? "default" : "pointer" }}
-          >
-            {clearing ? "Clearing…" : "Clear database"}
-          </button>
+          {view === "admin" && (
+            <button
+              onClick={clearAll}
+              disabled={clearing || !dbConfigured}
+              style={{ ...dangerButton, opacity: clearing || !dbConfigured ? 0.5 : 1, cursor: clearing || !dbConfigured ? "default" : "pointer" }}
+            >
+              {clearing ? "Clearing…" : "Clear database"}
+            </button>
+          )}
         </div>
       </div>
+
+      {(view === "ministry" || view === "admin") && (
+        <Card>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+            {view === "ministry" && (
+              <Field label="Country (from database)">
+                <select
+                  value={demoCountry}
+                  onChange={(e) => setDemoCountry(e.target.value)}
+                  style={{ ...inputStyle, minWidth: 260 }}
+                >
+                  {countries.map((c) => (
+                    <option key={c.iso} value={c.iso}>{c.name} ({c.iso})</option>
+                  ))}
+                </select>
+              </Field>
+            )}
+            {view === "admin" && (
+              <>
+                <Field label="Country">
+                  <select value={adminCountry} onChange={(e) => setAdminCountry(e.target.value)} style={{ ...inputStyle, minWidth: 220 }}>
+                    <option value="__all__">All countries</option>
+                    {countries.map((c) => (
+                      <option key={c.iso} value={c.iso}>{c.name} ({c.iso})</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Institution">
+                  <select value={adminSchool} onChange={(e) => setAdminSchool(e.target.value)} style={{ ...inputStyle, minWidth: 280 }}>
+                    <option value="__all__">All institutions{adminCountry !== "__all__" ? " in country" : ""}</option>
+                    {schools.map((s) => (
+                      <option key={s.code} value={s.code}>{s.name} ({s.code})</option>
+                    ))}
+                  </select>
+                </Field>
+              </>
+            )}
+            <span style={{ fontSize: 13, color: COLORS.muted, paddingBottom: 8 }}>
+              {view === "admin"
+                ? "Admin sees data only after minister L2 approval. Pending campus submissions are hidden."
+                : "Ministry and admin views load persisted data from the database only."}
+            </span>
+          </div>
+        </Card>
+      )}
 
       {!hasData ? (
         <Card>
           <p style={{ color: COLORS.muted, margin: 0, fontSize: 14 }}>
-            No staff records yet. Upload a teaching-staff CSV to get started.
+            {view === "institution" && sessionMappings > 0
+              ? `${sessionMappings} identity mapping(s) in this tab's session storage. Submit for Approval from the Upload tab to populate aggregates (requires Supabase in .env).`
+              : view !== "institution"
+                ? `No ministry-approved staff records in the database for this scope. Data appears after a minister approves the campus submission (L2).`
+                : dbConfigured
+                  ? "No staff records yet. Upload a teaching-staff file, validate offline, then submit for approval."
+                  : "No server data yet — and no database configured (that's fine). Upload a file and validate offline; add Supabase to .env only when you're ready to submit for approval."}
           </p>
         </Card>
       ) : (
@@ -1342,6 +1655,7 @@ function Dashboard({ view, setView }) {
 
           {view === "admin" && (
             <>
+              <OecsAggregationsPanel />
               <AdminSuggestionsPanel />
               <AdminCompleteness byTerritory={byTerritory} byInstitution={byInstitution} totalStaff={stats.totalRecords} mapped={totalMapped} />
               <RollupView title="OECS-wide rollup" agg={globalAgg} rows={byTerritory} rowLabel="Territory" entities={stats.entities} rlsOn={false} />
@@ -1414,7 +1728,7 @@ function KpiGauge({ ind }) {
   const val = ind.value ?? 0;
   // Attrition (4.c.6) is "lower is better"; the rest are "higher is better".
   const color = ind.code === "4.c.6"
-    ? (val <= 10 ? COLORS.good : val <= 20 ? "#f59e0b" : COLORS.bad)
+    ? (val <= 10 ? COLORS.good : val <= 20 ? WARN_BLUE : COLORS.bad)
     : ind.colour;
   return (
     <Card style={{ display: "grid", gap: 8, minWidth: 0 }}>
@@ -1765,9 +2079,9 @@ function RollupView({ title, agg, rows, rowLabel, entities, rlsOn = true }) {
 // Colour an indicator value good/warn/bad by simple thresholds.
 function indColor(code, v) {
   if (v == null) return COLORS.muted;
-  if (code === "4.c.6") return v <= 10 ? COLORS.good : v <= 20 ? "#f59e0b" : COLORS.bad;       // attrition: low good
-  if (code === "4.5.1") { const d = Math.abs(v - 1); return d <= 0.1 ? COLORS.good : d <= 0.3 ? "#f59e0b" : COLORS.bad; }
-  return v >= 75 ? COLORS.good : v >= 50 ? "#f59e0b" : COLORS.bad;                               // 4.c.1 / 4.c.7: high good
+  if (code === "4.c.6") return v <= 10 ? COLORS.good : v <= 20 ? WARN_BLUE : COLORS.bad;       // attrition: low good
+  if (code === "4.5.1") { const d = Math.abs(v - 1); return d <= 0.1 ? COLORS.good : d <= 0.3 ? WARN_BLUE : COLORS.bad; }
+  return v >= 75 ? COLORS.good : v >= 50 ? WARN_BLUE : COLORS.bad;                               // 4.c.1 / 4.c.7: high good
 }
 function indVal(row, code) {
   const i = (row.indicators || []).find((x) => x.code === code);
@@ -2148,7 +2462,7 @@ function MappingDetail({ ruli, mapping }) {
   if (!mapping) {
     return (
       <span style={{ color: COLORS.muted, fontSize: 14 }}>
-        No mapping found for this record.
+        No mapping in this tab&apos;s session storage — identity mappings are not stored on the server.
       </span>
     );
   }
@@ -2266,121 +2580,268 @@ function RejectedTable({ columns, rejected }) {
 }
 
 // =====================================================================
-// AUTH PANEL  --  real Auth0 SSO login + access/refresh token reveal
+// MINISTER APPROVALS  --  L2 queue for pending submissions
 // =====================================================================
-function AuthPanel() {
-  const { data: session, status } = useSession();
-  const [email, setEmail] = useState("");
-  const [busy, setBusy] = useState(false);
+function ApprovalsPanel({ demoCountry, setDemoCountry, countries }) {
+  const minister = countries.find((m) => m.iso === demoCountry) || countries[0];
+  const [pending, setPending] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+  const [previewId, setPreviewId] = useState(null);
+  const [previewAggs, setPreviewAggs] = useState([]);
 
-  if (status === "loading") {
-    return <Card><span style={{ color: COLORS.muted }}>Checking session…</span></Card>;
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/submissions/pending", { credentials: "include" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to load pending submissions");
+      setPending(json.pending || []);
+    } catch (e) {
+      setError(String(e.message || e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load, demoCountry]);
+
+  async function previewSubmission(id) {
+    setPreviewId(id);
+    setPreviewAggs([]);
+    try {
+      const res = await fetch(`/api/submissions/pending?submissionId=${id}`, { credentials: "include" });
+      const json = await res.json();
+      setPreviewAggs(json.aggregations || []);
+    } catch {
+      setPreviewAggs([]);
+    }
   }
 
-  if (!session) {
-    async function submit(e) {
-      e.preventDefault();
-      if (!email.trim()) return;
-      setBusy(true);
-      await signIn("credentials", { email: email.trim(), redirect: false });
-      setBusy(false);
+  async function act(id, action) {
+    setBusyId(id);
+    setError(null);
+    try {
+      let reason = "";
+      if (action === "reject") {
+        reason = window.prompt("Rejection reason (optional):") ?? "";
+      }
+      const res = await fetch(`/api/submissions/${id}/${action}`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ reason }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || `${action} failed`);
+      if (previewId === id) { setPreviewId(null); setPreviewAggs([]); }
+      await load();
+    } catch (e) {
+      setError(String(e.message || e));
+    } finally {
+      setBusyId(null);
     }
-    return (
+  }
+
+  return (
+    <div style={{ display: "grid", gap: 16 }}>
       <Card>
-        <form onSubmit={submit} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-          <div>
-            <h3 style={{ ...cardTitle, marginBottom: 4 }}>Sign in</h3>
-            <p style={{ color: COLORS.muted, margin: 0, fontSize: 15 }}>
-              Enter a provisioned email — your role comes from app_users (role-based access + RLS).
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ flex: "1 1 280px" }}>
+            <h3 style={{ ...cardTitle, marginBottom: 4 }}>Country approvals (L2)</h3>
+            <p style={{ color: COLORS.muted, margin: 0, fontSize: 14 }}>
+              Campus submissions (L1 auto-approved) awaiting ministerial sign-off before OECS visibility.
             </p>
           </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@ministry.gov"
-              style={{ ...inputStyle, minWidth: 220 }}
-            />
-            <button type="submit" disabled={busy} style={{
-              background: busy ? COLORS.disabled : COLORS.accent, color: "#fff", border: "none",
-              borderRadius: 8, padding: "10px 20px", fontSize: 14, fontWeight: 500,
-              cursor: busy ? "default" : "pointer",
-            }}>
-              {busy ? "Signing in…" : "Sign in"}
-            </button>
+          <div style={{ display: "flex", gap: 8, alignItems: "flex-end", flexWrap: "wrap" }}>
+            <Field label="Country">
+              <select
+                value={demoCountry}
+                onChange={(e) => setDemoCountry(e.target.value)}
+                style={{ ...inputStyle, minWidth: 240 }}
+              >
+                {countries.map((m) => (
+                  <option key={m.iso} value={m.iso}>
+                    {m.name} ({m.iso}) · {m.approvalRequired ? "L2 required" : "auto-approve"}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <button type="button" onClick={load} style={ghostButton}>Refresh</button>
           </div>
-        </form>
-      </Card>
-    );
-  }
-
-  const role = session.user?.role;
-  return (
-    <Card>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-        <div>
-          <h3 style={{ ...cardTitle, marginBottom: 4 }}>Signed in</h3>
-          <p style={{ color: COLORS.muted, margin: 0, fontSize: 15 }}>
-            {session.user?.email}
-            {" · "}
-            {role
-              ? <>role <b>{role}</b></>
-              : <span style={{ color: COLORS.errText }}>no app role — email not provisioned in app_users</span>}
+        </div>
+        {!minister?.approvalRequired && minister && (
+          <p style={{ margin: "12px 0 0", fontSize: 13, color: COLORS.muted }}>
+            {minister.name} has L2 approval turned off — campus submissions go straight to OECS after L1. Switch to a country with L2 required to demo the minister approval queue.
           </p>
-        </div>
-        <button onClick={() => signOut()} style={ghostButton}>Sign out</button>
-      </div>
-      <TokenPanel tokens={session.tokens} />
-    </Card>
-  );
-}
-
-// Shows the two SSO tokens. DEMO ONLY — never expose a refresh token to the
-// browser in production; it lives server-side.
-function TokenPanel({ tokens }) {
-  const [show, setShow] = useState(false);
-  if (!tokens) return null;
-
-  const exp = tokens.expiresAt
-    ? new Date(tokens.expiresAt * 1000).toLocaleTimeString()
-    : "—";
-
-  return (
-    <div style={{ marginTop: 16, borderTop: `1px solid ${COLORS.border}`, paddingTop: 16 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontSize: 15, fontWeight: 600 }}>SSO tokens</span>
-        <button onClick={() => setShow((s) => !s)} style={ghostButton}>
-          {show ? "Hide" : "Reveal tokens"}
-        </button>
-      </div>
-      {show && (
-        <div style={{ display: "grid", gap: 12, marginTop: 12 }}>
-          <TokenRow
-            label="Access token (short-lived)"
-            note={`expires ~${exp}. Sent per request to prove identity.`}
-            value={tokens.accessToken}
-          />
-          <TokenRow
-            label="Refresh token (long-lived)"
-            note="Silently gets a new access token — no re-login."
-            value={tokens.refreshToken}
-          />
-        </div>
+        )}
+      </Card>
+      {error && (
+        <Card style={{ background: COLORS.errBg, borderColor: COLORS.errBorder }}>
+          <span style={{ color: COLORS.errText }}>{error}</span>
+        </Card>
+      )}
+      {loading ? (
+        <Card><span style={{ color: COLORS.muted }}>Loading pending submissions…</span></Card>
+      ) : pending.length === 0 ? (
+        <Card>
+          <p style={{ color: COLORS.muted, margin: 0 }}>
+            {minister?.approvalRequired
+              ? "No submissions pending L2 approval for this country."
+              : "No L2 queue for this country — submissions are approved automatically after campus submit."}
+          </p>
+        </Card>
+      ) : (
+        <Card style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
+            <thead>
+              <tr style={{ textAlign: "left", color: COLORS.muted }}>
+                <th style={thStyle}>Campus</th>
+                <th style={thStyle}>Entity</th>
+                <th style={thStyle}>Submitted</th>
+                <th style={thStyle}>Aggregates</th>
+                <th style={thStyle}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pending.map((s) => (
+                <Fragment key={s.id}>
+                  <tr style={{ borderTop: `1px solid ${COLORS.border}` }}>
+                    <td style={tdStyle}>{s.school_name || s.school_code}</td>
+                    <td style={tdStyle}>{s.entity}</td>
+                    <td style={tdStyle}>{s.submitted_at ? new Date(s.submitted_at).toLocaleString() : "—"}</td>
+                    <td style={tdStyle}>{s.aggregation_count ?? 0}</td>
+                    <td style={{ ...tdStyle, display: "flex", gap: 8, flexWrap: "wrap" }}>
+                      <button type="button" style={ghostButton} onClick={() => previewSubmission(s.id)}>
+                        {previewId === s.id ? "Hide" : "Preview"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busyId === s.id}
+                        style={{ ...ghostButton, color: COLORS.good, borderColor: COLORS.good }}
+                        onClick={() => act(s.id, "approve")}
+                      >
+                        {busyId === s.id ? "…" : "Approve L2"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busyId === s.id}
+                        style={{ ...ghostButton, color: COLORS.bad, borderColor: COLORS.bad }}
+                        onClick={() => act(s.id, "reject")}
+                      >
+                        Reject
+                      </button>
+                    </td>
+                  </tr>
+                  {previewId === s.id && previewAggs.length > 0 && (
+                    <tr>
+                      <td colSpan={5} style={{ padding: "8px 12px 16px" }}>
+                        <AggregationsPreviewTable rows={previewAggs} />
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
+        </Card>
       )}
     </div>
   );
 }
 
-function TokenRow({ label, note, value }) {
+function AggregationsPreviewTable({ rows }) {
   return (
-    <div>
-      <div style={{ fontSize: 14, fontWeight: 600 }}>{label}</div>
-      <div style={{ fontSize: 13, color: COLORS.muted, marginBottom: 4 }}>{note}</div>
-      <pre style={{ ...preStyle, fontSize: 12, whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
-        {value || "— (not returned; check Auth0 offline_access scope)"}
-      </pre>
-    </div>
+    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+      <thead>
+        <tr style={{ textAlign: "left", color: COLORS.muted }}>
+          <th style={thStyle}>SDG</th>
+          <th style={thStyle}>Numerator</th>
+          <th style={thStyle}>Denominator</th>
+          <th style={thStyle}>Result</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
+            <td style={tdStyle}>{r.sdg}</td>
+            <td style={tdStyle}>{r.numerator ?? "—"}</td>
+            <td style={tdStyle}>{r.denominator ?? "—"}</td>
+            <td style={tdStyle}>{r.result ?? "—"}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function OecsAggregationsPanel() {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/aggregations", { credentials: "include" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Failed to load aggregations");
+      setRows(json.rows || []);
+    } catch (e) {
+      setError(String(e.message || e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  return (
+    <Card style={{ overflowX: "auto" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+        <div>
+          <h3 style={{ ...cardTitle, marginBottom: 4 }}>OECS approved aggregates</h3>
+          <p style={{ color: COLORS.muted, margin: 0, fontSize: 13 }}>
+            SDG rows from fully approved campus submissions — country and campus attached.
+          </p>
+        </div>
+        <button type="button" onClick={load} style={ghostButton}>Refresh</button>
+      </div>
+      {error && <p style={{ color: COLORS.bad, fontSize: 13 }}>{error}</p>}
+      {loading ? (
+        <span style={{ color: COLORS.muted }}>Loading…</span>
+      ) : rows.length === 0 ? (
+        <p style={{ color: COLORS.muted, margin: 0 }}>No approved aggregates yet.</p>
+      ) : (
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead>
+            <tr style={{ textAlign: "left", color: COLORS.muted }}>
+              <th style={thStyle}>SDG</th>
+              <th style={thStyle}>Country</th>
+              <th style={thStyle}>Campus</th>
+              <th style={thStyleNum}>Numerator</th>
+              <th style={thStyleNum}>Denominator</th>
+              <th style={thStyleNum}>Result</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id} style={{ borderTop: `1px solid ${COLORS.border}` }}>
+                <td style={tdStyle}>{r.sdg}</td>
+                <td style={tdStyle}>{r.countryName || r.country || "—"}</td>
+                <td style={tdStyle}>{r.campus || "—"}</td>
+                <td style={tdStyleNum}>{r.numerator ?? "—"}</td>
+                <td style={tdStyleNum}>{r.denominator ?? "—"}</td>
+                <td style={tdStyleNum}>{r.result ?? "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </Card>
   );
 }
 
@@ -2479,7 +2940,7 @@ function MinistryView({ schools, aggregateOnly }) {
         </span>
       </h3>
       {aggregateOnly && (
-        <div style={{ background: "#fffbeb", border: "1px solid #fde68a", color: "#92400e",
+        <div style={{ background: "#ebf3ff", border: "1px solid #8abafd", color: "#0e4592",
           borderRadius: 8, padding: "10px 14px", fontSize: 14, margin: "0 0 16px" }}>
           Drill-down restricted by admin — per-school totals only, no individual students.
           (RLS hides the student rows.)
@@ -3058,7 +3519,7 @@ function FinancePanel({ institutions }) {
 // values are flagged illustrative. Recomputes OECS aggregates from the scoped
 // territory rows. Renders nothing when no territory has reference data.
 const SYS_BLUE = "#4f8cf7";
-const SYS_ORANGE = "#f97316";
+const SYS_INDIGO = "#1675f9";
 const SYS_TEAL = "#14b8a6";
 function SystemPanel({ territories }) {
   const terrs = territories || [];
@@ -3078,7 +3539,7 @@ function SystemPanel({ territories }) {
   const odaShare = pct(odaEdu, odaTot);
   const cards = [
     { code: "4.3.2", colour: SYS_BLUE, title: "Tertiary GER", value: ger == null ? "—" : `${ger}%`, detail: pop ? `${enrol.toLocaleString()} / ${pop.toLocaleString()} cohort` : "no population reference" },
-    { code: "4.5.6", colour: SYS_ORANGE, title: "Expenditure % of GDP", value: pgdp == null ? "—" : `${pgdp}%`, detail: gdp ? `${exp.toLocaleString()} / ${gdp.toLocaleString()} GDP` : "no GDP reference" },
+    { code: "4.5.6", colour: SYS_INDIGO, title: "Expenditure % of GDP", value: pgdp == null ? "—" : `${pgdp}%`, detail: gdp ? `${exp.toLocaleString()} / ${gdp.toLocaleString()} GDP` : "no GDP reference" },
     { code: "4.5.5", colour: SYS_TEAL, title: "ODA to education share", value: odaShare == null ? "—" : `${odaShare}%`, detail: odaTot ? `${odaEdu.toLocaleString()} / ${odaTot.toLocaleString()} ODA` : "no ODA reference" },
   ];
   return (
@@ -3136,19 +3597,34 @@ function SystemPanel({ territories }) {
 // View-as toggle: institution -> one institution, ministry -> one
 // territory, admin -> OECS-wide.
 // =====================================================================
-function EnrolmentDashboard({ view = "institution" }) {
+function EnrolmentDashboard({ view, demoCountry, setDemoCountry, countries }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [sel, setSel] = useState(null);
-  const [recTab, setRecTab] = useState("stats");   // stats | records
+  const [recTab, setRecTab] = useState("stats");
   const [seeding, setSeeding] = useState(false);
+  const [adminCountry, setAdminCountry] = useState("__all__");
+  const [adminSchool, setAdminSchool] = useState("__all__");
+  const [schools, setSchools] = useState([]);
+
+  useEffect(() => {
+    if (view !== "admin") return;
+    const country = adminCountry === "__all__" ? "" : adminCountry;
+    fetch(`/api/schools-config${country ? `?country=${encodeURIComponent(country)}` : ""}`)
+      .then((r) => r.json())
+      .then((d) => setSchools(d.schools || []))
+      .catch(() => setSchools([]));
+    setAdminSchool("__all__");
+  }, [view, adminCountry]);
+
+  const scopeQuery = buildDbScopeQuery(view, { demoCountry, adminCountry, adminSchool });
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/sdg-enrolment");
+      const res = await fetch(`/api/sdg-enrolment${scopeQuery}`, { credentials: "include" });
       const json = await res.json();
       if (!res.ok) setError(json.error || "Failed to load enrolment data");
       else setData(json);
@@ -3157,7 +3633,9 @@ function EnrolmentDashboard({ view = "institution" }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [scopeQuery, view]);
+
+  useUiRefresh(load);
 
   // Populate the DB with synthetic instrument data (Cover/Background/Enrolment).
   const seedDemo = useCallback(async () => {
@@ -3181,17 +3659,58 @@ function EnrolmentDashboard({ view = "institution" }) {
   if (error) return <Card style={{ background: COLORS.errBg, borderColor: COLORS.errBorder }}><span style={{ color: COLORS.errText }}>{error}</span></Card>;
   if (!data || (data.count === 0 && !(data.rejected || []).length)) {
     return (
-      <Card>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-          <p style={{ color: COLORS.muted, margin: 0, fontSize: 14 }}>
-            No enrolment data yet. Upload an OECS instrument workbook with the
-            <b> Enrolment</b> data type — or generate demo data to explore the view.
-          </p>
-          <button onClick={seedDemo} disabled={seeding} style={ghostButton}>
-            {seeding ? "Generating…" : "Generate demo data"}
-          </button>
-        </div>
-      </Card>
+      <div style={{ display: "grid", gap: 16 }}>
+        {(view === "ministry" || view === "admin") && (
+          <Card>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "flex-end" }}>
+              {view === "ministry" && (
+                <Field label="Country (from database)">
+                  <select value={demoCountry} onChange={(e) => setDemoCountry(e.target.value)} style={{ ...inputStyle, minWidth: 260 }}>
+                    {countries.map((c) => (
+                      <option key={c.iso} value={c.iso}>{c.name} ({c.iso})</option>
+                    ))}
+                  </select>
+                </Field>
+              )}
+              {view === "admin" && (
+                <>
+                  <Field label="Country">
+                    <select value={adminCountry} onChange={(e) => setAdminCountry(e.target.value)} style={{ ...inputStyle, minWidth: 220 }}>
+                      <option value="__all__">All countries</option>
+                      {countries.map((c) => (
+                        <option key={c.iso} value={c.iso}>{c.name} ({c.iso})</option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Institution">
+                    <select value={adminSchool} onChange={(e) => setAdminSchool(e.target.value)} style={{ ...inputStyle, minWidth: 280 }}>
+                      <option value="__all__">All institutions</option>
+                      {schools.map((s) => (
+                        <option key={s.code} value={s.code}>{s.name} ({s.code})</option>
+                      ))}
+                    </select>
+                  </Field>
+                </>
+              )}
+              <button onClick={load} style={ghostButton}>Refresh</button>
+            </div>
+          </Card>
+        )}
+        <Card>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+            <p style={{ color: COLORS.muted, margin: 0, fontSize: 14 }}>
+              {view !== "institution"
+                ? "No enrolment data in the database for this scope. Submit for Approval from an institution account first."
+                : "No enrolment data yet. Upload an OECS instrument workbook with the Enrolment data type — or generate demo data to explore the view."}
+            </p>
+            {view === "institution" && (
+              <button onClick={seedDemo} disabled={seeding} style={ghostButton}>
+                {seeding ? "Generating…" : "Generate demo data"}
+              </button>
+            )}
+          </div>
+        </Card>
+      </div>
     );
   }
 
@@ -3245,6 +3764,29 @@ function EnrolmentDashboard({ view = "institution" }) {
           </p>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+          {view === "ministry" && countries.length > 0 && (
+            <select value={demoCountry} onChange={(e) => setDemoCountry(e.target.value)} style={inputStyle}>
+              {countries.map((c) => (
+                <option key={c.iso} value={c.iso}>{c.name} ({c.iso})</option>
+              ))}
+            </select>
+          )}
+          {view === "admin" && (
+            <>
+              <select value={adminCountry} onChange={(e) => setAdminCountry(e.target.value)} style={inputStyle}>
+                <option value="__all__">All countries</option>
+                {countries.map((c) => (
+                  <option key={c.iso} value={c.iso}>{c.name}</option>
+                ))}
+              </select>
+              <select value={adminSchool} onChange={(e) => setAdminSchool(e.target.value)} style={inputStyle}>
+                <option value="__all__">All institutions</option>
+                {schools.map((s) => (
+                  <option key={s.code} value={s.code}>{s.name}</option>
+                ))}
+              </select>
+            </>
+          )}
           {groups.length > 0 && (
             <select value={selKey} onChange={(e) => setSel(e.target.value)} style={inputStyle}>
               {showAll && <option value="__all__">OECS-wide ({data.count})</option>}
@@ -3703,3 +4245,5 @@ const dangerButton = {
 
 const thStyle = { padding: "10px 16px 10px 0", fontWeight: 600, fontSize: 13, textTransform: "uppercase", letterSpacing: "0.04em" };
 const tdStyle = { padding: "11px 16px 11px 0", fontSize: 14 };
+const thStyleNum = { ...thStyle, textAlign: "right" };
+const tdStyleNum = { ...tdStyle, textAlign: "right" };

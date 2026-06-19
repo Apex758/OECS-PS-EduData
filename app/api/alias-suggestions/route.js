@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
+import { isDbConfigured } from "@/lib/dbConfig";
 import { createPendingAlias } from "@/lib/db";
 import { getSubmitterIdentity } from "@/lib/submitterIdentity";
 
-// Public endpoint — no admin token required.
-// Uploader submits an alias suggestion (e.g. "Female" -> "F") after seeing
-// the unrecognized-values card. The suggestion is stored as 'pending' and
-// applied only for that same uploader's future uploads until an admin approves
-// it globally via /api/admin/alias-suggestions.
 export const runtime = "nodejs";
 
 export async function POST(req) {
+  if (!isDbConfigured()) {
+    return NextResponse.json(
+      { error: "Saving alias suggestions requires Supabase in .env." },
+      { status: 503 }
+    );
+  }
   try {
     const { entity, field, variant, canonical, institution, scope } = await req.json();
     if (!entity || !field || !variant || !canonical) {

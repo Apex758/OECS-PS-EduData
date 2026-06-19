@@ -1,74 +1,70 @@
 // =====================================================================
 // AUTH.JS (NextAuth v5)  --  Auth0 SSO + role mapping
 // =====================================================================
-// Auth0 is the identity broker (it fronts Google / username-password / etc).
-// Reads AUTH0_CLIENT_ID / AUTH0_CLIENT_SECRET / AUTH0_ISSUER + AUTH_SECRET
-// from .env.local. Callback URL: /api/auth/callback/auth0
-// Flow:
-//   1. User signs in via Auth0 (real OAuth 2.0 / OpenID Connect).
-//   2. Auth0 returns an ACCESS token (short-lived) + REFRESH token
-//      (long-lived, requested via the `offline_access` scope).
-//   3. We look up the email in app_users (resolveUserByEmail) to attach the
-//      app ROLE + country -> drives RBAC and the RLS session context.
-//
-// SECURITY NOTE: this DEMO deliberately surfaces the access/refresh tokens to
-// the client session so the UI token panel can show them. A real app keeps the
-// refresh token server-side ONLY. Do not copy this part to prod.
-// =====================================================================
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
-// import Auth0 from "next-auth/providers/auth0";   // optional broker, not needed for the demo
+import Auth0 from "next-auth/providers/auth0";
 import { resolveUserByEmail } from "@/lib/db";
+
+async function attachAppUser(token, email) {
+  const normalized = String(email || "").trim().toLowerCase();
+  if (!normalized) return token;
+  try {
+    const u = await resolveUserByEmail(normalized);
+    if (u) {
+      token.userId = u.id;
+      token.appRole = u.role;
+      token.countryId = u.country_id;
+      token.canDrill = u.can_drill_students;
+      token.email = normalized;
+    } else {
+      token.userId = null;
+      token.appRole = null;
+      token.countryId = null;
+      token.canDrill = null;
+      token.email = normalized;
+    }
+  } catch {
+    token.appRole = null;
+  }
+  return token;
+}
+
+const providers = [
+  Credentials({
+    name: "Email",
+    credentials: { email: { label: "Email", type: "email" } },
+    async authorize(creds) {
+      const email = String(creds?.email || "").trim().toLowerCase();
+      if (!email || !email.includes("@")) return null;
+      return { id: email, email };
+    },
+  }),
+];
+
+if (process.env.AUTH0_CLIENT_ID && process.env.AUTH0_CLIENT_SECRET && process.env.AUTH0_ISSUER) {
+  providers.unshift(
+    Auth0({
+      clientId: process.env.AUTH0_CLIENT_ID,
+      clientSecret: process.env.AUTH0_CLIENT_SECRET,
+      issuer: process.env.AUTH0_ISSUER,
+      authorization: { params: { scope: "openid profile email offline_access", prompt: "consent" } },
+    })
+  );
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
-  providers: [
-    // Email-only sign-in (no external IdP). The email IS the identity:
-    // app_users provisioning decides the role. Any email signs in; an
-    // un-provisioned one gets appRole=null (the UI shows "not provisioned").
-    // DEMO ONLY — no password. Swap in Auth0/Google for a real IdP later.
-    Credentials({
-      name: "Email",
-      credentials: { email: { label: "Email", type: "email" } },
-      async authorize(creds) {
-        const email = String(creds?.email || "").trim().toLowerCase();
-        if (!email || !email.includes("@")) return null;
-        return { id: email, email };
-      },
-    }),
-    // Auth0({
-    //   clientId: process.env.AUTH0_CLIENT_ID,
-    //   clientSecret: process.env.AUTH0_CLIENT_SECRET,
-    //   issuer: process.env.AUTH0_ISSUER,
-    //   authorization: { params: { scope: "openid profile email offline_access", prompt: "consent" } },
-    // }),
-  ],
+  providers,
   callbacks: {
-    // Runs on sign-in and on every session read. `account` is only present
-    // at sign-in -> capture the provider tokens then.
-    async jwt({ token, account, profile }) {
+    async jwt({ token, account, profile, user }) {
       if (account) {
         token.accessToken = account.access_token;
         token.refreshToken = account.refresh_token ?? token.refreshToken;
-        token.expiresAt = account.expires_at;   // epoch seconds
+        token.expiresAt = account.expires_at;
       }
-      // Map the Google identity to an app_users row (role + scope).
-      const email = profile?.email ?? token.email;
-      if (email && token.appRole === undefined) {
-        try {
-          const u = await resolveUserByEmail(email);
-          if (u) {
-            token.userId = u.id;
-            token.appRole = u.role;
-            token.countryId = u.country_id;
-            token.canDrill = u.can_drill_students;
-          } else {
-            token.appRole = null;   // signed in but not provisioned
-          }
-        } catch {
-          token.appRole = null;
-        }
-      }
+      const email = profile?.email ?? user?.email ?? token.email;
+      if (email) await attachAppUser(token, email);
       return token;
     },
     async session({ session, token }) {
@@ -76,8 +72,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       session.user.role = token.appRole ?? null;
       session.user.countryId = token.countryId ?? null;
       session.user.canDrill = token.canDrill;
-      // DEMO-ONLY: expose provider tokens for the token panel. Credentials
-      // login has none -> null so the panel hides.
       session.tokens = token.accessToken
         ? {
             accessToken: token.accessToken,

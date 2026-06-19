@@ -1,0 +1,10 @@
+country_iso,country_name,approval_required
+AG,Antigua and Barbuda,true
+AI,Anguilla,true
+VG,British Virgin Islands,true
+DM,Dominica,true
+GD,Grenada,false
+MS,Montserrat,true
+KN,Saint Kitts and Nevis,true
+LC,Saint Lucia,true
+VC,Saint Vincent and the Grenadines,true

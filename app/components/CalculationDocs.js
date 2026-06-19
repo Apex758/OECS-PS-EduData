@@ -17,8 +17,8 @@ import { SDG_COLOURS } from "@/lib/sdgIndicators";
 // system layers).
 const CODE_COLOURS = {
   "4.3.2": "#4f8cf7", "4.3.3": "#22d3ee", "4.5.1": "#a78bfa",
-  "4.5.3": "#8b5cf6", "4.5.4": "#0ea5e9", "4.5.5": "#14b8a6", "4.5.6": "#f97316",
-  "4.a.1": "#ec4899", "4.a.3": "#ef4444", "4.b.1": "#f59e0b",
+  "4.5.3": "#8b5cf6", "4.5.4": "#0ea5e9", "4.5.5": "#14b8a6", "4.5.6": "#1675f9",
+  "4.a.1": "#ec4899", "4.a.3": "#ef4444", "4.b.1": "#0b6cf5",
 };
 function codeColour(code) {
   if (CODE_COLOURS[code]) return CODE_COLOURS[code];
