@@ -64,9 +64,19 @@ begin
     return jsonb_build_object('error', 'rows[] required');
   end if;
 
-  select elem into r from jsonb_array_elements(p_rows) elem limit 1;
-  v_cid := _resolve_country(r->>'territory');
-  v_sid := _resolve_school(v_cid, r->>'institution');
+  select s.id, s.country_id
+    into v_sid, v_cid
+    from user_schools us
+    join schools s on s.id = us.school_id
+   where us.user_id = p_user_id
+   order by us.school_id
+   limit 1;
+
+  if v_sid is null then
+    select elem into r from jsonb_array_elements(p_rows) elem limit 1;
+    v_cid := _resolve_country(r->>'territory');
+    v_sid := _resolve_school(v_cid, r->>'institution');
+  end if;
 
   if not _user_can_submit(p_user_id, v_sid) then
     return jsonb_build_object('error', 'not authorized for this institution');
@@ -322,12 +332,27 @@ begin
     return jsonb_build_object('error', 'rows[] required');
   end if;
 
-  if v_terr is not null then
-    v_cid := _resolve_country(v_terr);
-    v_sid := _resolve_school(v_cid, coalesce(v_inst, 'Unspecified Institution'));
-  else
-    select o_school_id, o_country_id into v_sid, v_cid
-      from _resolve_school_byname(v_inst);
+  -- Prefer the submitter's assigned school so rows match ministry country scope
+  -- and admin approval filters (workbook Cover metadata can be wrong or absent).
+  select s.id, s.country_id, s.name, c.name
+    into v_sid, v_cid, v_inst, v_terr
+    from user_schools us
+    join schools s on s.id = us.school_id
+    join countries c on c.id = s.country_id
+   where us.user_id = p_user_id
+   order by us.school_id
+   limit 1;
+
+  if v_sid is null then
+    if v_terr is not null then
+      v_cid := _resolve_country(v_terr);
+      v_sid := _resolve_school(v_cid, coalesce(v_inst, 'Unspecified Institution'));
+    else
+      select o_school_id, o_country_id into v_sid, v_cid
+        from _resolve_school_byname(v_inst);
+      select name into v_inst from schools where id = v_sid;
+      select name into v_terr from countries where id = v_cid;
+    end if;
   end if;
 
   if not _user_can_submit(p_user_id, v_sid) then
@@ -367,7 +392,12 @@ begin
       (r->>'odaScholarship')::int,
       coalesce(r->'metadata','{}'::jsonb), v_sub_id
     )
-    on conflict (school_id, academic_year, division, programme) do nothing;
+    on conflict (school_id, academic_year, division, programme) do update set
+      submission_id = excluded.submission_id,
+      country_id = excluded.country_id,
+      school_id = excluded.school_id,
+      institution = excluded.institution,
+      metadata = excluded.metadata;
 
     if found then v_inserted := v_inserted + 1;
     else v_skipped := v_skipped + 1; end if;

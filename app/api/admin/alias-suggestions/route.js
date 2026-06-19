@@ -8,7 +8,7 @@ import {
 } from "@/lib/db";
 
 export const runtime = "nodejs";
-const deny = () => NextResponse.json({ error: "admin only" }, { status: 403 });
+const deny = () => NextResponse.json({ error: "OECS only" }, { status: 403 });
 
 // GET  — list all pending suggestions + total count (for badge).
 export async function GET(req) {

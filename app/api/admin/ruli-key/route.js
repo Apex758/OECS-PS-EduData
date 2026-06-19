@@ -5,7 +5,7 @@ import { listRuliKeys } from "@/lib/db";
 // View the per-exe RULI Mapper keys. READ-ONLY: each exe generates its own key
 // and self-registers it via /api/validation/ruli-key. Keys are masked here.
 export const runtime = "nodejs";
-const deny = () => NextResponse.json({ error: "admin only" }, { status: 403 });
+const deny = () => NextResponse.json({ error: "OECS only" }, { status: 403 });
 
 const mask = (k) => (k ? `${String(k).slice(0, 8)}…${String(k).slice(-4)}` : "");
 

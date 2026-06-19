@@ -25,7 +25,10 @@ async function attachAppUser(token, email) {
       token.email = normalized;
     }
   } catch {
+    token.userId = null;
     token.appRole = null;
+    token.countryId = null;
+    token.canDrill = null;
   }
   return token;
 }

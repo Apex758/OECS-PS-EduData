@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect } from "react";
-import { isChunkLoadError, recoverFromChunkError } from "@/lib/client/chunkRecovery";
+import { isChunkLoadError, isExtensionScriptError, recoverFromChunkError } from "@/lib/client/chunkRecovery";
 
 export default function Error({ error, reset }) {
+  const fromExtension = isExtensionScriptError(error);
+
   useEffect(() => {
     if (isChunkLoadError(error?.message)) {
       recoverFromChunkError();
@@ -24,11 +26,15 @@ export default function Error({ error, reset }) {
       }}
     >
       <div style={{ maxWidth: 420, textAlign: "center" }}>
-        <h2 style={{ margin: "0 0 8px", fontSize: 20 }}>Something went wrong</h2>
+        <h2 style={{ margin: "0 0 8px", fontSize: 20 }}>
+          {fromExtension ? "Browser extension conflict" : "Something went wrong"}
+        </h2>
         <p style={{ margin: "0 0 20px", color: "var(--muted, #7a8090)", fontSize: 14, lineHeight: 1.5 }}>
-          {isChunkLoadError(error?.message)
-            ? "Reloading to fetch the latest app bundle…"
-            : "An unexpected error occurred. Try again or refresh the page."}
+          {fromExtension
+            ? "A browser extension injected script into this page and crashed (common on localhost). Try a private window, disable extensions for localhost, or use http://localhost:3000 after a single dev server is running."
+            : isChunkLoadError(error?.message)
+              ? "Reloading to fetch the latest app bundle…"
+              : "An unexpected error occurred. Try again or refresh the page."}
         </p>
         {!isChunkLoadError(error?.message) && (
           <button

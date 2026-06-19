@@ -36,7 +36,7 @@ export async function POST(req) {
 
 // Admin-only: unregister a key by id, or wipe all when no id is given (demo reset).
 export async function DELETE(req) {
-  if (!(await isAdmin(req))) return NextResponse.json({ error: "admin only" }, { status: 403 });
+  if (!(await isAdmin(req))) return NextResponse.json({ error: "OECS only" }, { status: 403 });
   try {
     const { id } = await req.json().catch(() => ({}));
     const r = await deleteRuliKey({ id: id || null });

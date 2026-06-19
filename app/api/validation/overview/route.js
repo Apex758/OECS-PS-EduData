@@ -7,7 +7,7 @@ import { valListAllDups, valListTokens, valListEvents, listRuliKeys } from "@/li
 // many exes have registered. No identity key lives here — salts stay anonymous;
 // the two colliding institutions confirm the person locally in their own exe.
 export const runtime = "nodejs";
-const deny = () => NextResponse.json({ error: "admin only" }, { status: 403 });
+const deny = () => NextResponse.json({ error: "OECS only" }, { status: 403 });
 
 export async function GET(req) {
   if (!(await isAdmin(req))) return deny();

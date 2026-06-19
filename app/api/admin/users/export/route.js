@@ -10,7 +10,7 @@ import { exportUsers } from "@/lib/userAdmin";
 export const runtime = "nodejs";
 
 export async function GET(req) {
-  if (!(await isAdmin(req))) return NextResponse.json({ error: "admin only" }, { status: 403 });
+  if (!(await isAdmin(req))) return NextResponse.json({ error: "OECS only" }, { status: 403 });
   try {
     const data = await exportUsers();
     const json = JSON.stringify(data, null, 2) + "\n";

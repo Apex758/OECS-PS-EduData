@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef, Fragment, createContext, useContext } from "react";
-import { useSession, signIn } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import {
   ResponsiveContainer, RadialBarChart, RadialBar, PolarAngleAxis,
   PieChart, Pie, Cell, BarChart, Bar as RBar, XAxis, YAxis,
@@ -12,6 +12,7 @@ import ValidationRules from "./components/ValidationRules";
 import CalculationDocs from "./components/CalculationDocs";
 import { processFileOffline, isEnrolmentWorkbookFile } from "@/lib/client/processUpload";
 import { pushToApprovalLayer } from "@/lib/client/pushPayload";
+import { ensureDemoPersona, isInstitutionSession, sessionMatches } from "@/lib/client/ensureDemoPersona";
 import { getMappingByRuli, vaultSize, clearVault } from "@/lib/client/piiVault";
 import {
   Clock, Lock, Globe, Check, X as XIcon,
@@ -76,8 +77,27 @@ const LIGHT_PALETTES = [
   },
 ];
 
-const PaletteCtx = createContext(DARK_PALETTES[0].series);
+const VIEW_STORAGE_KEY = "oecsDashboardView";
 
+const VIEW_MODES = [
+  { value: "institution", label: "Institution" },
+  { value: "ministry", label: "Ministry" },
+  { value: "admin", label: "OECS" },
+  { value: "validation", label: "Validation layer" },
+];
+
+function readStoredView() {
+  if (typeof sessionStorage === "undefined") return "institution";
+  const stored = sessionStorage.getItem(VIEW_STORAGE_KEY);
+  if (stored === "institution" || stored === "ministry" || stored === "admin") return stored;
+  return "institution";
+}
+
+function persistView(next) {
+  if (typeof sessionStorage !== "undefined") sessionStorage.setItem(VIEW_STORAGE_KEY, next);
+}
+
+const PaletteCtx = createContext(DARK_PALETTES[0].series);
 
 // Clear cached admin token on Ctrl/Cmd+R (manual reload) but NOT on server-
 // restart-triggered reloads, which have no corresponding keydown event.
@@ -104,8 +124,23 @@ export default function Home() {
   const countries = useCountriesConfig();
   useDemoPersona(view, demoCountry, countries);
 
+  useEffect(() => {
+    const stored = sessionStorage.getItem(VIEW_STORAGE_KEY);
+    if (stored === "validation") {
+      window.location.href = "/validation";
+      return;
+    }
+    setView(readStoredView());
+  }, []);
+
   const switchView = useCallback((next) => {
+    if (next === "validation") {
+      persistView("validation");
+      window.location.href = "/validation";
+      return;
+    }
     if (next === view) return;
+    persistView(next);
     clearVault();
     setView(next);
     window.dispatchEvent(new Event("oecs:ui-refresh"));
@@ -122,6 +157,7 @@ export default function Home() {
   useEffect(() => {
     if (view !== "admin" && (tab === "access" || tab === "validation" || tab === "calculations")) setTab("dashboard");
     if (view !== "ministry" && tab === "approvals") setTab("dashboard");
+    if (view !== "institution" && tab === "upload") setTab("dashboard");
   }, [view, tab]);
 
   useEffect(() => {
@@ -155,36 +191,17 @@ export default function Home() {
           </div>
           {/* View-as switcher (demo) — top-right, always available */}
           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, marginTop: 6 }}>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            <ModeButton active={view === "institution"} onClick={() => switchView("institution")}>Institution</ModeButton>
-            <ModeButton active={view === "ministry"} onClick={() => switchView("ministry")}>Ministry</ModeButton>
-            <ModeButton active={view === "admin"} onClick={() => switchView("admin")}>Admin</ModeButton>
-            <a
-              href="/validation"
-              style={{
-                border: `1px solid ${COLORS.border}`,
-                background: COLORS.card,
-                color: "var(--text)",
-                borderRadius: 8,
-                padding: "9px 16px",
-                fontSize: 15,
-                fontWeight: 500,
-                cursor: "pointer",
-                textDecoration: "none",
-                display: "inline-block",
-              }}
-            >
-              Validation layer
-            </a>
-          </div>
+          <ViewModeSelect value={view} onChange={switchView} />
           <span style={{ fontSize: 12, color: COLORS.muted }}>Demo: {demoPersonaLabel(view, demoCountry, countries)}</span>
           </div>
         </header>
 
         <nav style={{ display: "flex", gap: 4, marginBottom: 24, borderBottom: `1px solid ${COLORS.border}` }}>
-          <TabButton active={tab === "upload"} onClick={() => setTab("upload")}>
-            Upload
-          </TabButton>
+          {view === "institution" && (
+            <TabButton active={tab === "upload"} onClick={() => setTab("upload")}>
+              Upload
+            </TabButton>
+          )}
           <TabButton active={tab === "dashboard"} onClick={() => setTab("dashboard")}>
             Dashboard
           </TabButton>
@@ -213,11 +230,11 @@ export default function Home() {
           )}
         </nav>
 
-        {/* Kept mounted (hidden via CSS) so the upload queue + results survive
-            tab switches; conditional unmount would drop the in-memory File list. */}
-        <div style={{ display: tab === "upload" ? "block" : "none" }} key={view}>
-          <UploadPanel view={view} />
-        </div>
+        {view === "institution" && (
+          <div style={{ display: tab === "upload" ? "block" : "none" }} key={view}>
+            <UploadPanel view={view} />
+          </div>
+        )}
         {tab === "dashboard" && (
           <Dashboard view={view} demoCountry={demoCountry} setDemoCountry={setDemoCountry} countries={countries} />
         )}
@@ -364,7 +381,7 @@ function demoEmailForView(view, countryIso = "LC", countries = []) {
 }
 
 function demoPersonaLabel(view, countryIso = "LC", countries = []) {
-  if (view === "admin") return "OECS Admin";
+  if (view === "admin") return "OECS";
   if (view === "ministry") {
     const c = countries.find((x) => x.iso === countryIso) || countries[0];
     if (!c) return "Minister";
@@ -373,21 +390,23 @@ function demoPersonaLabel(view, countryIso = "LC", countries = []) {
   return "Sir Arthur Lewis (LC-CC)";
 }
 
+function demoAllowedRoles(view) {
+  if (view === "institution") return ["teacher", "admin"];
+  if (view === "ministry") return ["minister"];
+  return ["admin"];
+}
+
 function useDemoPersona(view, demoCountry, countries) {
   const { data: session, status } = useSession();
-  const signing = useRef(false);
 
   useEffect(() => {
     if (status === "loading") return;
     if (view === "ministry" && !countries.length) return;
     const email = demoEmailForView(view, demoCountry, countries);
-    if (session?.user?.email?.toLowerCase() === email.toLowerCase()) return;
-    if (signing.current) return;
-    signing.current = true;
-    signIn("credentials", { email, redirect: false }).finally(() => {
-      signing.current = false;
-    });
-  }, [view, demoCountry, countries, status, session?.user?.email]);
+    const allowedRoles = demoAllowedRoles(view);
+    if (sessionMatches(session, email, allowedRoles)) return;
+    ensureDemoPersona(email, { allowedRoles }).catch(() => {});
+  }, [view, demoCountry, countries, status, session?.user?.email, session?.user?.role, session?.user?.id]);
 }
 
 function useCountriesConfig() {
@@ -433,9 +452,11 @@ function canPushToApprovalLayer(entry) {
 }
 
 function UploadPanel({ view = "institution" }) {
+  const { data: session, status: sessionStatus } = useSession();
   // Role demoed is driven by the dashboard view toggle.
   const role = VIEW_ROLE[view] || "teacher";
   const scope = ROLE_SCOPE[role] || "institution";
+  const institutionReady = sessionStatus !== "loading" && isInstitutionSession(session);
   // Record type is auto-detected from the file's columns server-side (no
   // dropdown). "auto" tells /api/process to identify staff/student/institution.
   const [entity] = useState("auto");
@@ -578,12 +599,14 @@ function UploadPanel({ view = "institution" }) {
     setPushingId(entry.id);
     setQueue((q) => q.map((e) => e.id === entry.id ? { ...e, pushError: null } : e));
     try {
+      await ensureDemoPersona(DEMO_INSTITUTION_EMAIL, { allowedRoles: ["teacher", "admin"] });
       const out = await pushToApprovalLayer(entry);
       setQueue((q) => q.map((e) => e.id === entry.id ? {
         ...e,
         pushed: true,
         pushResult: out,
       } : e));
+      window.dispatchEvent(new Event("oecs:ui-refresh"));
     } catch (err) {
       setQueue((q) => q.map((e) => e.id === entry.id ? {
         ...e,
@@ -818,20 +841,29 @@ function UploadPanel({ view = "institution" }) {
                   {entry.pushError && (
                     <p style={{ margin: "6px 0 0", fontSize: 13, color: COLORS.bad }}>{entry.pushError}</p>
                   )}
+                  {!institutionReady && sessionStatus !== "loading" && !entry.pushed && (
+                    <p style={{ margin: "6px 0 0", fontSize: 13, color: COLORS.muted }}>
+                      Signing in as Sir Arthur Lewis (LC-CC)…
+                    </p>
+                  )}
                 </div>
                 <button
                   type="button"
                   onClick={() => pushEntry(entry)}
-                  disabled={entry.pushed || pushingId === entry.id || !navigator.onLine}
-                  title={!navigator.onLine ? "Connect to the internet to submit" : undefined}
+                  disabled={entry.pushed || pushingId === entry.id || !navigator.onLine || !institutionReady}
+                  title={
+                    !institutionReady ? "Waiting for institution sign-in…"
+                    : !navigator.onLine ? "Connect to the internet to submit"
+                    : undefined
+                  }
                   style={{
-                    background: entry.pushed || pushingId === entry.id || !navigator.onLine ? COLORS.disabled : COLORS.accent,
+                    background: entry.pushed || pushingId === entry.id || !navigator.onLine || !institutionReady ? COLORS.disabled : COLORS.accent,
                     color: "#fff", border: "none", borderRadius: 8,
                     padding: "12px 20px", fontSize: 14, fontWeight: 600,
-                    cursor: entry.pushed || pushingId === entry.id || !navigator.onLine ? "default" : "pointer",
+                    cursor: entry.pushed || pushingId === entry.id || !navigator.onLine || !institutionReady ? "default" : "pointer",
                   }}
                 >
-                  {pushingId === entry.id ? "Submitting…" : entry.pushed ? "Submitted for approval" : "Submit for Approval"}
+                  {pushingId === entry.id ? "Submitting…" : entry.pushed ? "Submitted for Approval" : "Submit for Approval"}
                 </button>
               </div>
             </Card>
@@ -847,8 +879,8 @@ function UploadPanel({ view = "institution" }) {
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 6 }}>
                     {entry.pushResult.status === "pending_l2"
-                      ? "Submitted — awaiting minister approval (L2)"
-                      : "Submitted — approved and visible to OECS"}
+                      ? "Submitted for Approval — awaiting minister sign-off (L2)"
+                      : "Submitted for Approval — visible to OECS"}
                   </div>
                   <p style={{ margin: "0 0 8px", fontSize: 15, color: COLORS.text, lineHeight: 1.5 }}>
                     Submitted <strong>{entry.pushResult.recordsInserted}</strong> record(s)
@@ -1581,8 +1613,8 @@ function Dashboard({ view, demoCountry, setDemoCountry, countries }) {
             )}
             <span style={{ fontSize: 13, color: COLORS.muted, paddingBottom: 8 }}>
               {view === "admin"
-                ? "Admin sees data only after minister L2 approval. Pending campus submissions are hidden."
-                : "Ministry and admin views load persisted data from the database only."}
+                ? "OECS sees data only after minister L2 approval. Pending campus submissions are hidden."
+                : "Ministry and OECS views load persisted data from the database only."}
             </span>
           </div>
         </Card>
@@ -3345,23 +3377,18 @@ function ClassList({ classes }) {
   );
 }
 
-function ModeButton({ active, onClick, children }) {
+function ViewModeSelect({ value, onChange }) {
   return (
-    <button
-      onClick={onClick}
-      style={{
-        border: `1px solid ${active ? COLORS.accent : COLORS.border}`,
-        background: active ? COLORS.accent : COLORS.card,
-        color: active ? "#fff" : "var(--text)",
-        borderRadius: 8,
-        padding: "9px 16px",
-        fontSize: 15,
-        fontWeight: 500,
-        cursor: "pointer",
-      }}
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      aria-label="View as"
+      style={{ ...inputStyle, minWidth: 220, fontWeight: 500, padding: "9px 12px" }}
     >
-      {children}
-    </button>
+      {VIEW_MODES.map((m) => (
+        <option key={m.value} value={m.value}>{m.label}</option>
+      ))}
+    </select>
   );
 }
 
@@ -3700,8 +3727,10 @@ function EnrolmentDashboard({ view, demoCountry, setDemoCountry, countries }) {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
             <p style={{ color: COLORS.muted, margin: 0, fontSize: 14 }}>
               {view !== "institution"
-                ? "No enrolment data in the database for this scope. Submit for Approval from an institution account first."
-                : "No enrolment data yet. Upload an OECS instrument workbook with the Enrolment data type — or generate demo data to explore the view."}
+                ? view === "ministry"
+                  ? "No enrolment in the database for this country yet. An institution must Validate and Submit for Approval first — pending L2 submissions appear here before OECS admin can see them."
+                  : "No ministry-approved enrolment for this scope. Approve the campus submission at Ministry → Approvals, then refresh."
+                : "No enrolment data yet. Upload an OECS instrument workbook, Validate, then Submit for Approval — the Enrolment tab only shows data after it is saved to the database."}
             </p>
             {view === "institution" && (
               <button onClick={seedDemo} disabled={seeding} style={ghostButton}>

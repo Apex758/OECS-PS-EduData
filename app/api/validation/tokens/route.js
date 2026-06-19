@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isAdminOrRuliKey } from "@/lib/ruliKeyAuth";
+import { isValidationPushAuthorized } from "@/lib/ruliKeyAuth";
 import { isDbConfigured, pushRequiresDbResponse } from "@/lib/dbConfig";
 import { valInsertTokens, valScan, valLogEvent, valDeleteTokens } from "@/lib/db";
 
@@ -11,7 +11,7 @@ const deny = () => NextResponse.json({ error: "not authorized" }, { status: 403 
 
 export async function POST(req) {
   if (!isDbConfigured()) return pushRequiresDbResponse();
-  if (!(await isAdminOrRuliKey(req))) return deny();
+  if (!(await isValidationPushAuthorized(req))) return deny();
   try {
     const { tokens } = await req.json();
     if (!Array.isArray(tokens)) return NextResponse.json({ error: "tokens[] required" }, { status: 400 });
@@ -33,7 +33,7 @@ export async function POST(req) {
 // collision no longer holds are cleaned up inside valDeleteTokens.
 export async function DELETE(req) {
   if (!isDbConfigured()) return pushRequiresDbResponse();
-  if (!(await isAdminOrRuliKey(req))) return deny();
+  if (!(await isValidationPushAuthorized(req))) return deny();
   try {
     const { tokens } = await req.json();
     if (!Array.isArray(tokens)) return NextResponse.json({ error: "tokens[] required" }, { status: 400 });

@@ -24,6 +24,10 @@ function useChunkLoadRecovery() {
       }
     };
     const onRejection = (event) => {
+      if (isExtensionScriptError(event)) {
+        event.preventDefault?.();
+        return;
+      }
       const msg = event.reason?.message ?? String(event.reason ?? "");
       if (isChunkLoadError(msg)) {
         event.preventDefault?.();
